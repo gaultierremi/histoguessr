@@ -5,7 +5,7 @@ import Link from "next/link";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-browser";
 import { ADMIN_EMAILS, VALIDATOR_EMAILS, ALL_ADMIN_EMAILS } from "@/lib/admin-config";
-import type { Question, QuestionStatus } from "@/lib/types";
+import type { Question, QuestionStatus, QuizQuestion, QuizQuestionStatus } from "@/lib/types";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -27,19 +27,22 @@ const EMPTY_FORM: FormState = {
   imagePreview: null,
 };
 
-const STATUS_STYLES: Record<QuestionStatus, string> = {
+// QuizQuestionStatus is a superset of QuestionStatus — one map covers both
+const STATUS_STYLES: Record<QuizQuestionStatus, string> = {
   pending:  "bg-yellow-500/10 text-yellow-400 border border-yellow-500/20",
+  to_check: "bg-blue-500/10   text-blue-400   border border-blue-500/20",
   approved: "bg-green-500/10  text-green-400  border border-green-500/20",
   rejected: "bg-red-500/10    text-red-400    border border-red-500/20",
 };
 
-const STATUS_LABELS: Record<QuestionStatus, string> = {
+const STATUS_LABELS: Record<QuizQuestionStatus, string> = {
   pending:  "En attente",
+  to_check: "À vérifier",
   approved: "Approuvé",
   rejected: "Refusé",
 };
 
-function StatusBadge({ status }: { status: QuestionStatus }) {
+function StatusBadge({ status }: { status: QuizQuestionStatus }) {
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[status]}`}>
       {STATUS_LABELS[status]}
@@ -112,10 +115,7 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.imageFile) {
-      setMessage({ ok: false, text: "Sélectionne une image." });
-      return;
-    }
+    if (!form.imageFile) { setMessage({ ok: false, text: "Sélectionne une image." }); return; }
     setSubmitting(true);
     setMessage(null);
 
@@ -167,12 +167,9 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
 
   return (
     <div className="space-y-10">
-      {/* Form */}
       <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 sm:p-6">
         <h2 className="mb-5 text-base font-bold text-white">Soumettre une question</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
-
-          {/* Image */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">
               Image <span className="text-amber-400">*</span>
@@ -181,24 +178,16 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
               <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-gray-700">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={form.imagePreview} alt="Aperçu" className="h-full w-full object-cover" />
-                <button
-                  type="button"
-                  onClick={clearImage}
-                  className="absolute right-2 top-2 rounded-full bg-gray-950/80 px-3 py-1 text-xs text-gray-300 backdrop-blur-sm hover:text-white"
-                >
+                <button type="button" onClick={clearImage}
+                  className="absolute right-2 top-2 rounded-full bg-gray-950/80 px-3 py-1 text-xs text-gray-300 backdrop-blur-sm hover:text-white">
                   ✕ Changer
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-700 bg-gray-950 text-gray-500 transition-colors hover:border-amber-500/40 hover:text-gray-400"
-              >
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-700 bg-gray-950 text-gray-500 transition-colors hover:border-amber-500/40 hover:text-gray-400">
                 <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
+                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
                 </svg>
                 <span className="text-sm">Cliquer pour choisir une image</span>
                 <span className="text-xs text-gray-600">JPG, PNG, WEBP</span>
@@ -207,53 +196,41 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
             <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
           </div>
 
-          {/* Anachronisme */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">
               Anachronisme <span className="text-amber-400">*</span>
             </label>
-            <input
-              type="text" value={form.answer} required
+            <input type="text" value={form.answer} required
               onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
               placeholder="ex : montre connectée, panneau solaire…"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
-            />
+              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
           </div>
 
-          {/* Période */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">
               Période <span className="text-amber-400">*</span>
             </label>
-            <input
-              type="text" value={form.period} required
+            <input type="text" value={form.period} required
               onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
               placeholder="ex : Moyen Âge, XVIIe siècle…"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
-            />
+              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
           </div>
 
-          {/* Indice */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">
               Indice <span className="text-xs font-normal text-gray-500">(optionnel)</span>
             </label>
-            <input
-              type="text" value={form.hint}
+            <input type="text" value={form.hint}
               onChange={(e) => setForm((f) => ({ ...f, hint: e.target.value }))}
               placeholder="ex : Regarde attentivement son poignet"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
-            />
+              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
           </div>
 
-          {/* Difficulté */}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulté</label>
-            <select
-              value={form.difficulty}
+            <select value={form.difficulty}
               onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
-            >
+              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none">
               <option value="1">1 — Facile</option>
               <option value="2">2 — Moyen</option>
               <option value="3">3 — Expert</option>
@@ -266,16 +243,13 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
             </p>
           )}
 
-          <button
-            type="submit" disabled={submitting}
-            className="w-full rounded-full bg-amber-500 py-3 text-sm font-bold text-gray-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
-          >
+          <button type="submit" disabled={submitting}
+            className="w-full rounded-full bg-amber-500 py-3 text-sm font-bold text-gray-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
             {submitting ? "Envoi en cours…" : "Soumettre pour validation"}
           </button>
         </form>
       </section>
 
-      {/* Questions list */}
       <section className="pb-12">
         <h2 className="mb-4 text-base font-bold text-white">
           Mes questions <span className="text-sm font-normal text-gray-500">({questions.length})</span>
@@ -293,24 +267,21 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
                     <p className="truncate text-sm font-semibold text-white">{q.answer}</p>
                     <p className="truncate text-xs text-gray-500">{q.period ?? "—"}</p>
                     <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <StatusBadge status={q.status} />
+                      <StatusBadge status={q.status as QuizQuestionStatus} />
                       <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
                         Diff. {q.difficulty ?? "?"}
                       </span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => handleDelete(q)}
-                    className="flex-shrink-0 rounded-lg border border-red-900/40 px-3 py-1.5 text-xs text-red-500 transition-colors hover:border-red-500/60 hover:text-red-400"
-                  >
+                  <button onClick={() => handleDelete(q)}
+                    className="flex-shrink-0 rounded-lg border border-red-900/40 px-3 py-1.5 text-xs text-red-500 transition-colors hover:border-red-500/60 hover:text-red-400">
                     Supprimer
                   </button>
                 </div>
                 {q.status === "rejected" && q.rejection_reason && (
                   <div className="mt-2.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
                     <p className="text-xs text-red-400">
-                      <span className="font-semibold">Motif de refus : </span>
-                      {q.rejection_reason}
+                      <span className="font-semibold">Motif de refus : </span>{q.rejection_reason}
                     </p>
                   </div>
                 )}
@@ -323,9 +294,9 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
   );
 }
 
-// ─── Validator view ───────────────────────────────────────────────────────────
+// ─── Anachronisme validator ───────────────────────────────────────────────────
 
-function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
+function AnachronismeValidator({ supabase }: { supabase: SupabaseClient }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [loading, setLoading] = useState(true);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
@@ -360,93 +331,243 @@ function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
     fetchPending();
   }
 
-  function openReject(id: string) {
-    setRejectingId(id);
-    setRejectReason("");
-  }
+  if (loading) return (
+    <div className="flex justify-center py-10">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+    </div>
+  );
+
+  if (questions.length === 0) return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
+      <p className="text-sm text-gray-500">Aucune question en attente de validation.</p>
+    </div>
+  );
 
   return (
-    <div className="pb-12">
-      <h2 className="mb-4 text-base font-bold text-white">
-        Questions en attente{" "}
-        <span className="text-sm font-normal text-gray-500">({questions.length})</span>
-      </h2>
-
-      {loading ? (
-        <div className="flex justify-center py-10">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
-        </div>
-      ) : questions.length === 0 ? (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
-          <p className="text-sm text-gray-500">Aucune question en attente de validation.</p>
-        </div>
-      ) : (
-        <ul className="space-y-4">
-          {questions.map((q) => (
-            <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-              {/* Question info */}
-              <div className="flex items-start gap-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={q.image_url} alt={q.answer} className="h-20 w-28 flex-shrink-0 rounded-lg object-cover sm:h-24 sm:w-36" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold text-white">{q.answer}</p>
-                  <p className="mt-0.5 text-sm text-gray-400">{q.period ?? "—"}</p>
-                  {q.hint && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      <span className="font-medium text-gray-400">Indice : </span>{q.hint}
-                    </p>
-                  )}
-                  <p className="mt-1 text-xs text-gray-500">Difficulté : {q.difficulty ?? "?"}</p>
-                </div>
-              </div>
-
-              {/* Actions */}
-              {rejectingId === q.id ? (
-                <div className="mt-4 space-y-2">
-                  <textarea
-                    autoFocus
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    placeholder="Motif du refus…"
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none"
-                  />
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleReject(q.id)}
-                      disabled={!rejectReason.trim()}
-                      className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40"
-                    >
-                      Confirmer le refus
-                    </button>
-                    <button
-                      onClick={() => setRejectingId(null)}
-                      className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white"
-                    >
-                      Annuler
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="mt-4 flex gap-2">
-                  <button
-                    onClick={() => handleApprove(q.id)}
-                    className="flex-1 rounded-lg bg-green-600/20 py-2 text-sm font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30"
-                  >
-                    ✓ Approuver
-                  </button>
-                  <button
-                    onClick={() => openReject(q.id)}
-                    className="flex-1 rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20"
-                  >
-                    ✕ Refuser
-                  </button>
-                </div>
+    <ul className="space-y-4">
+      {questions.map((q) => (
+        <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <div className="flex items-start gap-4">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={q.image_url} alt={q.answer} className="h-20 w-28 flex-shrink-0 rounded-lg object-cover sm:h-24 sm:w-36" />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-white">{q.answer}</p>
+              <p className="mt-0.5 text-sm text-gray-400">{q.period ?? "—"}</p>
+              {q.hint && (
+                <p className="mt-1 text-xs text-gray-500">
+                  <span className="font-medium text-gray-400">Indice : </span>{q.hint}
+                </p>
               )}
-            </li>
-          ))}
-        </ul>
-      )}
+              <p className="mt-1 text-xs text-gray-500">Difficulté : {q.difficulty ?? "?"}</p>
+            </div>
+          </div>
+
+          {rejectingId === q.id ? (
+            <div className="mt-4 space-y-2">
+              <textarea autoFocus value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Motif du refus…" rows={2}
+                className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none" />
+              <div className="flex gap-2">
+                <button onClick={() => handleReject(q.id)} disabled={!rejectReason.trim()}
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40">
+                  Confirmer le refus
+                </button>
+                <button onClick={() => setRejectingId(null)}
+                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => handleApprove(q.id)}
+                className="flex-1 rounded-lg bg-green-600/20 py-2 text-sm font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30">
+                ✓ Approuver
+              </button>
+              <button onClick={() => { setRejectingId(q.id); setRejectReason(""); }}
+                className="flex-1 rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20">
+                ✕ Refuser
+              </button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ─── Quiz validator ───────────────────────────────────────────────────────────
+
+function QuizValidator({ supabase }: { supabase: SupabaseClient }) {
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const fetchReviewable = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("quiz_questions")
+      .select("*")
+      .in("status", ["pending", "to_check"])
+      .order("created_at", { ascending: true });
+    if (data) setQuestions(data as QuizQuestion[]);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { fetchReviewable(); }, [fetchReviewable]);
+
+  async function handleApprove(id: string) {
+    await supabase.from("quiz_questions").update({ status: "approved" }).eq("id", id);
+    fetchReviewable();
+  }
+
+  async function handleToCheck(id: string) {
+    await supabase.from("quiz_questions").update({ status: "to_check" }).eq("id", id);
+    fetchReviewable();
+  }
+
+  async function handleReject(id: string) {
+    if (!rejectReason.trim()) return;
+    await supabase.from("quiz_questions").update({
+      status: "rejected",
+      rejection_reason: rejectReason.trim(),
+    }).eq("id", id);
+    setRejectingId(null);
+    setRejectReason("");
+    fetchReviewable();
+  }
+
+  if (loading) return (
+    <div className="flex justify-center py-10">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+    </div>
+  );
+
+  if (questions.length === 0) return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
+      <p className="text-sm text-gray-500">Aucune question quiz en attente de validation.</p>
+    </div>
+  );
+
+  return (
+    <ul className="space-y-4">
+      {questions.map((q) => (
+        <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          {/* Header */}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <StatusBadge status={q.status} />
+            <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+              {q.type === "mcq" ? "QCM" : "Vrai/Faux"}
+            </span>
+            <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+              {"★".repeat(q.difficulty)}<span className="text-gray-700">{"★".repeat(3 - q.difficulty)}</span>
+            </span>
+            {q.period && (
+              <span className="text-xs text-gray-500">{q.period}</span>
+            )}
+          </div>
+
+          {/* Question text */}
+          <p className="font-medium text-white">{q.question}</p>
+
+          {/* Options */}
+          <ul className="mt-2 space-y-1">
+            {q.options.map((opt, i) => (
+              <li key={i} className={`flex items-center gap-1.5 text-sm ${
+                i === q.answer_index ? "text-green-400" : "text-gray-500"
+              }`}>
+                <span className="font-mono text-xs">{String.fromCharCode(65 + i)}.</span>
+                {opt}
+                {i === q.answer_index && <span className="text-green-600 text-xs">✓</span>}
+              </li>
+            ))}
+          </ul>
+
+          {/* Explanation */}
+          {q.explanation && (
+            <p className="mt-2 text-xs text-gray-500 italic">
+              <span className="not-italic font-medium text-gray-400">Explication : </span>
+              {q.explanation}
+            </p>
+          )}
+
+          {/* Actions */}
+          {rejectingId === q.id ? (
+            <div className="mt-4 space-y-2">
+              <textarea autoFocus value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Motif du refus…" rows={2}
+                className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none" />
+              <div className="flex gap-2">
+                <button onClick={() => handleReject(q.id)} disabled={!rejectReason.trim()}
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40">
+                  Confirmer le refus
+                </button>
+                <button onClick={() => setRejectingId(null)}
+                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 flex gap-2">
+              <button onClick={() => handleApprove(q.id)}
+                className="flex-1 rounded-lg bg-green-600/20 py-2 text-sm font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30">
+                ✓ Valider
+              </button>
+              <button onClick={() => handleToCheck(q.id)} disabled={q.status === "to_check"}
+                className="flex-1 rounded-lg bg-blue-600/10 py-2 text-sm font-semibold text-blue-400 ring-1 ring-blue-500/20 transition-colors hover:bg-blue-600/20 disabled:cursor-default disabled:opacity-40">
+                ⚠ À vérifier
+              </button>
+              <button onClick={() => { setRejectingId(q.id); setRejectReason(""); }}
+                className="flex-1 rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20">
+                ✕ Refuser
+              </button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// ─── Validator view (with tabs) ───────────────────────────────────────────────
+
+type ValidatorTab = "anachronismes" | "quiz";
+
+function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
+  const [activeTab, setActiveTab] = useState<ValidatorTab>("anachronismes");
+
+  const tabs: { id: ValidatorTab; label: string }[] = [
+    { id: "anachronismes", label: "Anachronismes" },
+    { id: "quiz",          label: "Quiz" },
+  ];
+
+  return (
+    <div className="pb-12 space-y-6">
+      {/* Tab bar */}
+      <div className="flex gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+              activeTab === tab.id
+                ? "bg-amber-500 text-gray-950"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "anachronismes"
+        ? <AnachronismeValidator supabase={supabase} />
+        : <QuizValidator supabase={supabase} />
+      }
     </div>
   );
 }
@@ -478,8 +599,6 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen bg-gray-950 px-4 py-8">
       <div className="mx-auto max-w-2xl space-y-8">
-
-        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-black text-white">
@@ -500,7 +619,6 @@ export default function AdminPage() {
           ? <ValidatorView supabase={supabase} />
           : <CreatorView supabase={supabase} />
         }
-
       </div>
     </main>
   );

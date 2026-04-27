@@ -81,27 +81,49 @@ export default function Home() {
           Trouve l&apos;intrus et prouve que tu maîtrises l&apos;Histoire.
         </p>
 
-        {/* CTA */}
-        <Link
-          href="/game"
-          className="group mt-1 inline-flex items-center gap-2 rounded-full bg-amber-500 px-10 py-4 text-lg font-bold text-gray-950 shadow-lg shadow-amber-500/20 transition-all duration-200 hover:bg-amber-400 hover:shadow-amber-400/30 active:scale-95"
-        >
-          Jouer
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="transition-transform duration-200 group-hover:translate-x-1"
+        {/* CTAs */}
+        <div className="mt-1 flex flex-col items-center gap-3">
+          <Link
+            href="/game"
+            className="group inline-flex items-center gap-2 rounded-full bg-amber-500 px-10 py-4 text-lg font-bold text-gray-950 shadow-lg shadow-amber-500/20 transition-all duration-200 hover:bg-amber-400 hover:shadow-amber-400/30 active:scale-95"
           >
-            <line x1="5" y1="12" x2="19" y2="12" />
-            <polyline points="12 5 19 12 12 19" />
-          </svg>
-        </Link>
+            Jouer
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-200 group-hover:translate-x-1"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </Link>
+          <Link
+            href="/quiz"
+            className="group inline-flex items-center gap-2 rounded-full border border-gray-700 px-10 py-3.5 text-base font-semibold text-gray-300 transition-all duration-200 hover:border-gray-500 hover:text-white active:scale-95"
+          >
+            Mode Quiz
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-200 group-hover:translate-x-1"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </Link>
+        </div>
 
         {/* Stats row */}
         <div className="mt-4 flex items-center gap-8 border-t border-gray-800 pt-7">
