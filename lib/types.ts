@@ -30,3 +30,20 @@ export type QuizQuestion = {
   rejection_reason: string | null;
   created_at: string;
 };
+
+export type DuelStatus = "waiting" | "ready" | "playing" | "finished";
+
+export type Duel = {
+  id: string;
+  code: string;
+  difficulty: QuizDifficulty;
+  question_ids: string[];
+  host_id: string;
+  host_name: string;
+  guest_id: string | null;
+  guest_name: string | null;
+  status: DuelStatus;
+  host_score: number | null;
+  guest_score: number | null;
+  created_at: string;
+};

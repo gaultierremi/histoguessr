@@ -160,9 +160,11 @@ function ResultsScreen({
 export default function QuizCard({
   questions,
   difficulty,
+  onComplete,
 }: {
   questions: QuizQuestion[];
   difficulty: QuizDifficulty;
+  onComplete?: (score: number, maxScore: number) => void;
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
@@ -224,17 +226,16 @@ export default function QuizCard({
         ? question.options[selectedIndex]
         : "";
 
-    setAnswers((prev) => [
-      ...prev,
-      {
-        question,
-        mode: effectiveMode,
-        playerAnswer,
-        correct: isCorrect,
-        pointsEarned: isCorrect ? pointsPossible : 0,
-        pointsPossible,
-      },
-    ]);
+    const newRecord = {
+      question,
+      mode: effectiveMode,
+      playerAnswer,
+      correct: isCorrect,
+      pointsEarned: isCorrect ? pointsPossible : 0,
+      pointsPossible,
+    };
+    const newAnswers = [...answers, newRecord];
+    setAnswers(newAnswers);
 
     if (step < total - 1) {
       setStep((s) => s + 1);
@@ -244,12 +245,24 @@ export default function QuizCard({
       setSelectedIndex(null);
       setCashInput("");
       setDuoIndices(null);
+    } else if (onComplete) {
+      const finalScore = newAnswers.reduce((s, r) => s + r.pointsEarned, 0);
+      const finalMax   = newAnswers.reduce((s, r) => s + r.pointsPossible, 0);
+      onComplete(finalScore, finalMax);
     }
   }
 
   // ── Derived display data ────────────────────────────────────────────────────
 
   if (sessionDone) {
+    if (onComplete) {
+      return (
+        <div className="flex flex-col items-center gap-4 py-16 text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+          <p className="text-sm text-gray-400">En attente de l&apos;adversaire…</p>
+        </div>
+      );
+    }
     return <ResultsScreen answers={answers} difficulty={difficulty} />;
   }
 
