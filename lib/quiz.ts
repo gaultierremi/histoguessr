@@ -3,7 +3,7 @@ import type { QuizQuestion, QuizDifficulty } from "@/lib/types";
 
 export async function getQuizQuestions(
   difficulty: QuizDifficulty,
-  count = 5
+  count = 10
 ): Promise<QuizQuestion[]> {
   const { data, error } = await supabase
     .from("quiz_questions")

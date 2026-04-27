@@ -79,7 +79,7 @@ function SetupView({
         <h1 className="mt-4 text-4xl font-black tracking-tight text-white">
           Défie un ami
         </h1>
-        <p className="mt-2 text-gray-400">5 questions, même temps, meilleur score gagne</p>
+        <p className="mt-2 text-gray-400">10 questions, même temps, meilleur score gagne</p>
       </div>
 
       {/* Tab switcher */}

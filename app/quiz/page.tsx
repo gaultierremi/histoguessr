@@ -43,7 +43,7 @@ function DifficultySelect() {
           <h1 className="mt-4 text-4xl font-black tracking-tight text-white">
             Choisis ton niveau
           </h1>
-          <p className="mt-2 text-gray-400">5 questions pour tester tes connaissances</p>
+          <p className="mt-2 text-gray-400">10 questions pour tester tes connaissances</p>
         </div>
 
         <div className="flex w-full flex-col gap-3">

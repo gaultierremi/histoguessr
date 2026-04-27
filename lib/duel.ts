@@ -8,7 +8,7 @@ function randomCode(): string {
 async function pickQuestionIds(
   supabase: SupabaseClient,
   difficulty: QuizDifficulty,
-  count = 5
+  count = 10
 ): Promise<string[]> {
   const { data, error } = await supabase
     .from("quiz_questions")
