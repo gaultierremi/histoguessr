@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AuthButton from "@/components/AuthButton";
 
 function IconScroll() {
   return (
@@ -34,6 +35,11 @@ function IconBar() {
 export default function Home() {
   return (
     <main className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-gray-950 px-4">
+      {/* Top-right auth */}
+      <div className="absolute right-4 top-4 z-20">
+        <AuthButton />
+      </div>
+
       {/* Vignette */}
       <div
         aria-hidden
