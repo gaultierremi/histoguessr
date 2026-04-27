@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { QuizQuestion, QuizDifficulty } from "@/lib/types";
+import { createClient } from "@/lib/supabase-browser";
+import { saveQuizScore } from "@/lib/scores";
 
 // ─── Types & constants ────────────────────────────────────────────────────────
 
@@ -249,6 +251,20 @@ export default function QuizCard({
       const finalScore = newAnswers.reduce((s, r) => s + r.pointsEarned, 0);
       const finalMax   = newAnswers.reduce((s, r) => s + r.pointsPossible, 0);
       onComplete(finalScore, finalMax);
+    } else {
+      const finalScore = newAnswers.reduce((s, r) => s + r.pointsEarned, 0);
+      const finalMax   = newAnswers.reduce((s, r) => s + r.pointsPossible, 0);
+      createClient().auth.getUser().then(({ data }) => {
+        if (data.user) {
+          saveQuizScore(
+            data.user.id,
+            data.user.user_metadata?.full_name ?? data.user.email ?? "Joueur",
+            difficulty,
+            finalScore,
+            finalMax
+          ).catch(() => {});
+        }
+      });
     }
   }
 

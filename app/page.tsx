@@ -143,6 +143,12 @@ export default function Home() {
               <polyline points="12 5 19 12 12 19" />
             </svg>
           </Link>
+          <Link
+            href="/scoreboard"
+            className="text-sm text-gray-600 transition-colors hover:text-gray-400"
+          >
+            🏆 Scoreboard
+          </Link>
         </div>
 
         {/* Stats row */}

@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-browser";
 import { createDuel, joinDuel, submitDuelAnswers, getDuelQuestions } from "@/lib/duel";
+import { saveDuelResult } from "@/lib/scores";
 import QuizCard from "@/components/QuizCard";
 import type { Duel, QuizDifficulty, QuizQuestion } from "@/lib/types";
 
@@ -293,6 +294,7 @@ export default function DuelLobby({ user }: { user: User }) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
 
   const countdownStartedRef = useRef(false);
+  const resultSavedRef      = useRef(false);
   const channelRef          = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   const displayName = user.user_metadata?.full_name ?? user.email ?? "Joueur";
@@ -334,6 +336,10 @@ export default function DuelLobby({ user }: { user: User }) {
 
     // Both scores submitted → show results
     if (duel.host_score !== null && duel.guest_score !== null && step !== "results") {
+      if (!resultSavedRef.current) {
+        resultSavedRef.current = true;
+        saveDuelResult(duel).catch(() => {});
+      }
       setStep("results");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -392,6 +398,7 @@ export default function DuelLobby({ user }: { user: User }) {
     channelRef.current?.unsubscribe();
     channelRef.current = null;
     countdownStartedRef.current = false;
+    resultSavedRef.current      = false;
     setDuel(null);
     setIsHost(false);
     setQuestions([]);
