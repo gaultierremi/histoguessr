@@ -1,3 +1,5 @@
+export type QuestionStatus = "pending" | "approved" | "rejected";
+
 export type Question = {
   id: string;
   image_url: string;
@@ -7,4 +9,6 @@ export type Question = {
   period: string | null;
   difficulty: number | null;
   created_at: string;
+  status: QuestionStatus;
+  rejection_reason: string | null;
 };

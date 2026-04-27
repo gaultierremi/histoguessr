@@ -5,6 +5,7 @@ export async function getRandomQuestion(): Promise<Question> {
   const { data, error } = await supabase
     .from("questions")
     .select("*")
+    .eq("status", "approved")
     .limit(100);
 
   if (error) throw new Error(error.message);
@@ -19,6 +20,7 @@ export async function getSessionQuestions(count = 5): Promise<Question[]> {
   const { data, error } = await supabase
     .from("questions")
     .select("*")
+    .eq("status", "approved")
     .limit(100);
 
   console.log("getSessionQuestions — questions fetched:", data?.length);
