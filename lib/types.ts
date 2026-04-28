@@ -47,3 +47,16 @@ export type Duel = {
   guest_score: number | null;
   created_at: string;
 };
+
+export type TimelineEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  year: number;
+  image_url: string | null;
+  category: string | null;
+  difficulty: 1 | 2 | 3;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason: string | null;
+  created_at: string;
+};

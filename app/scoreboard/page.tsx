@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase-server";
+import Header from "@/components/Header";
 import {
   getQuizLeaderboard,
   getDuelLeaderboard,
@@ -179,7 +180,9 @@ export default async function ScoreboardPage({
   ]);
 
   return (
-    <main className="min-h-screen bg-gray-950 px-4 py-10">
+    <main className="flex min-h-screen flex-col bg-gray-950">
+      <Header />
+      <div className="flex-1 px-4 py-10">
       <div className="mx-auto max-w-2xl">
         {/* Header */}
         <div className="mb-8 flex items-center gap-4">
@@ -223,6 +226,7 @@ export default async function ScoreboardPage({
         )}
 
         {tab === "recent" && <RecentList rows={recentDuels} />}
+      </div>
       </div>
     </main>
   );

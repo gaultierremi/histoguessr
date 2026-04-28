@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-browser";
+import Header from "@/components/Header";
 import { ADMIN_EMAILS, VALIDATOR_EMAILS, ALL_ADMIN_EMAILS } from "@/lib/admin-config";
 import type { Question, QuestionStatus, QuizQuestion, QuizQuestionStatus } from "@/lib/types";
 
@@ -597,7 +598,9 @@ export default function AdminPage() {
   const role = isValidator ? "Validateur" : "Créateur";
 
   return (
-    <main className="min-h-screen bg-gray-950 px-4 py-8">
+    <main className="flex min-h-screen flex-col bg-gray-950">
+      <Header />
+      <div className="flex-1 px-4 py-8">
       <div className="mx-auto max-w-2xl space-y-8">
         <div className="flex items-center justify-between">
           <div>
@@ -619,6 +622,7 @@ export default function AdminPage() {
           ? <ValidatorView supabase={supabase} />
           : <CreatorView supabase={supabase} />
         }
+      </div>
       </div>
     </main>
   );

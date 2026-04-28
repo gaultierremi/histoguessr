@@ -144,6 +144,26 @@ export default function Home() {
             </svg>
           </Link>
           <Link
+            href="/timeline"
+            className="group inline-flex items-center gap-2 rounded-full border border-gray-700 px-10 py-3.5 text-base font-semibold text-gray-300 transition-all duration-200 hover:border-amber-500/50 hover:text-white active:scale-95"
+          >
+            📅 Frise
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="transition-transform duration-200 group-hover:translate-x-1"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+              <polyline points="12 5 19 12 12 19" />
+            </svg>
+          </Link>
+          <Link
             href="/scoreboard"
             className="text-sm text-gray-600 transition-colors hover:text-gray-400"
           >

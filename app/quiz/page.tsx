@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getQuizQuestions } from "@/lib/quiz";
 import QuizCard from "@/components/QuizCard";
+import Header from "@/components/Header";
 import type { QuizDifficulty } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,9 @@ const DIFF_CONFIG = [
 
 function DifficultySelect() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-950 px-4 py-12">
+    <main className="flex min-h-screen flex-col bg-gray-950">
+      <Header />
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12">
       <div className="flex w-full max-w-md flex-col items-center gap-8">
         <div className="text-center">
           <span className="mb-4 inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-amber-400">
@@ -83,6 +86,7 @@ function DifficultySelect() {
           ← Retour à l&apos;accueil
         </Link>
       </div>
+      </div>
     </main>
   );
 }
@@ -102,24 +106,30 @@ export default async function QuizPage({
   try {
     const questions = await getQuizQuestions(difficulty);
     return (
-      <main className="min-h-screen bg-gray-950 px-4">
-        <QuizCard questions={questions} difficulty={difficulty} />
+      <main className="flex min-h-screen flex-col bg-gray-950">
+        <Header />
+        <div className="flex-1 px-4">
+          <QuizCard questions={questions} difficulty={difficulty} />
+        </div>
       </main>
     );
   } catch {
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-4 bg-gray-950 p-4">
-        <p className="text-center text-gray-400">
-          Pas assez de questions disponibles pour ce niveau.
-          <br />
-          <span className="text-sm text-gray-600">Revenez plus tard !</span>
-        </p>
-        <Link
-          href="/quiz"
-          className="rounded-full bg-amber-500 px-6 py-2 text-sm font-bold text-gray-950 hover:bg-amber-400"
-        >
-          ← Choisir un autre niveau
-        </Link>
+      <main className="flex min-h-screen flex-col bg-gray-950">
+        <Header />
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-4">
+          <p className="text-center text-gray-400">
+            Pas assez de questions disponibles pour ce niveau.
+            <br />
+            <span className="text-sm text-gray-600">Revenez plus tard !</span>
+          </p>
+          <Link
+            href="/quiz"
+            className="rounded-full bg-amber-500 px-6 py-2 text-sm font-bold text-gray-950 hover:bg-amber-400"
+          >
+            ← Choisir un autre niveau
+          </Link>
+        </div>
       </main>
     );
   }
