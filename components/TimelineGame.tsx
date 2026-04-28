@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import type { TimelineEvent } from "@/lib/types";
 import { calculateScore } from "@/lib/timeline";
 
@@ -24,11 +24,72 @@ function getTimeline(events: TimelineEvent[]) {
   const marks: number[] = [];
   const first = Math.ceil(start / step) * step;
   for (let y = first; y <= end; y += step) marks.push(y);
-  return { start, span, marks };
+  return { start, end, span, marks, step };
 }
 
 function pct(year: number, start: number, span: number): number {
   return Math.max(0, Math.min(100, ((year - start) / span) * 100));
+}
+
+// Magnifying-glass distortion: the ±50-year zone around hoverYear occupies 25% of width.
+function distortedPct(
+  year: number,
+  hoverYear: number | null,
+  start: number,
+  end: number,
+  span: number,
+): number {
+  if (hoverYear === null) return pct(year, start, span);
+  const ZOOM_W  = 0.25;
+  const OUTER_W = 0.75;
+  const zStart = Math.max(start, hoverYear - 50);
+  const zEnd   = Math.min(end,   hoverYear + 50);
+  const zSpan  = Math.max(zEnd - zStart, 1);
+  const leftSpan  = zStart - start;
+  const rightSpan = end - zEnd;
+  const totalOuter = leftSpan + rightSpan;
+  if (totalOuter <= 0) return pct(year, start, span);
+  const leftW  = OUTER_W * (leftSpan  / totalOuter);
+  const rightW = OUTER_W * (rightSpan / totalOuter);
+  if (year <= zStart) {
+    if (leftSpan <= 0) return 0;
+    return Math.max(0, (year - start) / leftSpan * leftW * 100);
+  } else if (year <= zEnd) {
+    return (leftW + ZOOM_W * (year - zStart) / zSpan) * 100;
+  } else {
+    if (rightSpan <= 0) return 100;
+    return Math.min(100, (leftW + ZOOM_W + rightW * (year - zEnd) / rightSpan) * 100);
+  }
+}
+
+// Inverse: from display ratio (0-1) back to year, given current hoverYear as zoom center.
+function invertDistorted(
+  ratio: number,
+  hoverYear: number,
+  start: number,
+  end: number,
+  span: number,
+): number {
+  const ZOOM_W  = 0.25;
+  const OUTER_W = 0.75;
+  const zStart = Math.max(start, hoverYear - 50);
+  const zEnd   = Math.min(end,   hoverYear + 50);
+  const zSpan  = Math.max(zEnd - zStart, 1);
+  const leftSpan  = zStart - start;
+  const rightSpan = end - zEnd;
+  const totalOuter = leftSpan + rightSpan;
+  if (totalOuter <= 0) return Math.round(start + ratio * span);
+  const leftW  = OUTER_W * (leftSpan  / totalOuter);
+  const rightW = OUTER_W * (rightSpan / totalOuter);
+  if (ratio <= leftW) {
+    if (leftW <= 0) return start;
+    return start + (ratio / leftW) * leftSpan;
+  } else if (ratio <= leftW + ZOOM_W) {
+    return zStart + ((ratio - leftW) / ZOOM_W) * zSpan;
+  } else {
+    if (rightW <= 0) return end;
+    return zEnd + ((ratio - leftW - ZOOM_W) / rightW) * rightSpan;
+  }
 }
 
 function proxied(url: string | null): string | null {
@@ -38,13 +99,36 @@ function proxied(url: string | null): string | null {
     : url;
 }
 
+// ─── Bar gaussian-bump helper ─────────────────────────────────────────────────
+
+const BAR_BASE_H     = 16;
+const BAR_MAX_H      = 48;
+const BAR_CENTER_TOP = 127;
+const BAR_SVG_TOP    = BAR_CENTER_TOP - BAR_MAX_H / 2; // 103
+const BAR_SIGMA      = 0.07;
+const BAR_STEPS      = 60;
+
+function makeBarPath(cursorRatio: number | null): string {
+  const pts: { x: number; topY: number; botY: number }[] = [];
+  for (let i = 0; i <= BAR_STEPS; i++) {
+    const r    = i / BAR_STEPS;
+    const bump = cursorRatio !== null
+      ? Math.exp(-((r - cursorRatio) ** 2) / (2 * BAR_SIGMA ** 2))
+      : 0;
+    const h = BAR_BASE_H + (BAR_MAX_H - BAR_BASE_H) * bump;
+    pts.push({ x: r * 100, topY: (BAR_MAX_H - h) / 2, botY: (BAR_MAX_H + h) / 2 });
+  }
+  const top = pts.map(p => `${p.x.toFixed(1)},${p.topY.toFixed(2)}`).join(" L ");
+  const bot = [...pts].reverse().map(p => `${p.x.toFixed(1)},${p.botY.toFixed(2)}`).join(" L ");
+  return `M ${top} L ${bot} Z`;
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CARD_H     = 360;
-const PIN_LINE_H = 42;
-const BAR_H      = 24;
-const ZONE_H     = 200;
-const BAR_TOP    = 115;
+const CARD_H         = 360;
+const PIN_LINE_H     = 42;
+const ZONE_H         = 200;
+const PIN_ANCHOR_BOT = ZONE_H - BAR_CENTER_TOP; // 73
 
 // ─── Confetti ─────────────────────────────────────────────────────────────────
 
@@ -575,13 +659,16 @@ export default function TimelineGame({
   const [pinKey, setPinKey]           = useState(0);
   const [exiting, setExiting]         = useState(false);
   const [entering, setEntering]       = useState(false);
+  const [hoverYear, setHoverYear]     = useState<number | null>(null);
+  const [cursorRatio, setCursorRatio] = useState<number | null>(null);
+  const [inputYear, setInputYear]     = useState<string>("");
   const zoneRef = useRef<HTMLDivElement>(null);
 
   const total = events.length;
   const event = events[step];
   const done  = results.length === total;
 
-  const { start, span, marks } = getTimeline(events);
+  const { start, end, span, marks } = getTimeline(events);
 
   // ── Interactions ─────────────────────────────────────────────────────────────
 
@@ -589,7 +676,9 @@ export default function TimelineGame({
     if (validated || !zoneRef.current) return;
     const rect  = zoneRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const year  = Math.round(start + ratio * span);
+    const year  = hoverYear !== null
+      ? Math.round(invertDistorted(ratio, hoverYear, start, end, span))
+      : Math.round(start + ratio * span);
 
     if (guessedYear !== null) {
       setPinAnim("shake");
@@ -601,11 +690,49 @@ export default function TimelineGame({
       setTimeout(() => setPinAnim("idle"), 550);
     }
     setGuessedYear(year);
+    setInputYear(String(year));
+  }
+
+  function handleMouseMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (validated || !zoneRef.current) return;
+    const rect  = zoneRef.current.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    const year  = hoverYear !== null
+      ? Math.round(invertDistorted(ratio, hoverYear, start, end, span))
+      : Math.round(start + ratio * span);
+    setCursorRatio(ratio);
+    setHoverYear(year);
+  }
+
+  function handleMouseLeave() {
+    setCursorRatio(null);
+    setHoverYear(null);
+  }
+
+  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (validated) return;
+    const val = e.target.value;
+    setInputYear(val);
+    const parsed = parseInt(val, 10);
+    if (!isNaN(parsed) && val !== "" && parsed >= start && parsed <= end) {
+      if (guessedYear !== null) {
+        setPinAnim("shake");
+        setPinKey((k) => k + 1);
+        setTimeout(() => setPinAnim("idle"), 400);
+      } else {
+        setPinAnim("drop");
+        setPinKey((k) => k + 1);
+        setTimeout(() => setPinAnim("idle"), 550);
+      }
+      setGuessedYear(parsed);
+    }
   }
 
   function handleValidate() {
     if (guessedYear === null) return;
     setValidated(true);
+    setHoverYear(null);
+    setCursorRatio(null);
   }
 
   function handleNext() {
@@ -620,6 +747,9 @@ export default function TimelineGame({
         setValidated(false);
         setPinAnim("idle");
         setPinKey(0);
+        setHoverYear(null);
+        setCursorRatio(null);
+        setInputYear("");
         setExiting(false);
         setEntering(true);
         setTimeout(() => setEntering(false), 500);
@@ -632,9 +762,42 @@ export default function TimelineGame({
   const runningScore = results.reduce((s, r) => s + r.score, 0);
   const currentScore = validated && guessedYear !== null ? calculateScore(guessedYear, event.year) : null;
   const yearDiff     = validated && guessedYear !== null ? Math.abs(guessedYear - event.year) : null;
-  const guessedPct   = guessedYear !== null ? pct(guessedYear, start, span) : null;
-  const truePct      = pct(event.year, start, span);
   const showConfetti = validated && yearDiff !== null && yearDiff <= 20;
+
+  // Distorted position helper — uses magnifying-glass mapping when hoverYear is set.
+  function dpct(year: number): number {
+    return distortedPct(year, hoverYear, start, end, span);
+  }
+
+  const guessedPct = guessedYear !== null ? dpct(guessedYear) : null;
+  const truePct    = dpct(event.year);
+
+  // Dynamic graduation marks
+  const fineHalfYears = 0.15 * span;
+  const fineStart = hoverYear !== null ? hoverYear - fineHalfYears : null;
+  const fineEnd   = hoverYear !== null ? hoverYear + fineHalfYears : null;
+
+  const visibleBaseMarks = fineStart !== null
+    ? marks.filter(y => y < fineStart! || y > fineEnd!)
+    : marks;
+
+  const { fineTickMarks, fineLabelMarks } = useMemo(() => {
+    if (fineStart === null || fineEnd === null) return { fineTickMarks: [], fineLabelMarks: [] };
+    const ticks: number[] = [];
+    const labels: number[] = [];
+    const first5 = Math.ceil(fineStart / 5) * 5;
+    for (let y = first5; y <= fineEnd; y += 5) {
+      ticks.push(y);
+      if (y % 10 === 0) labels.push(y);
+    }
+    return { fineTickMarks: ticks, fineLabelMarks: labels };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fineStart, fineEnd]);
+
+  const barPath = useMemo(
+    () => makeBarPath(validated ? null : cursorRatio),
+    [cursorRatio, validated],
+  );
 
   if (done) return <FinalScreen results={results} difficulty={difficulty} />;
 
@@ -677,6 +840,13 @@ export default function TimelineGame({
           from { transform: translateX(130%)  rotateY(-15deg); opacity: 0; }
           to   { transform: translateX(0)     rotateY(0deg);   opacity: 1; }
         }
+        @keyframes label-fade-in {
+          from { opacity: 0; }
+          to   { opacity: 1; }
+        }
+        .tl-no-spin::-webkit-outer-spin-button,
+        .tl-no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        .tl-no-spin { -moz-appearance: textfield; }
       `}</style>
 
       <div className="flex w-full flex-col pb-8">
@@ -726,9 +896,9 @@ export default function TimelineGame({
                   ? "Clique sur la ligne du temps pour placer l'événement"
                   : "Reclique pour ajuster, puis valide")}
               </p>
-              {guessedYear !== null && !validated && (
+              {(hoverYear !== null || guessedYear !== null) && !validated && (
                 <span className="text-3xl font-black tracking-tight text-amber-400">
-                  {guessedYear}
+                  {hoverYear ?? guessedYear}
                 </span>
               )}
             </div>
@@ -740,82 +910,180 @@ export default function TimelineGame({
                 className={`relative w-full select-none ${!validated ? "cursor-crosshair" : ""}`}
                 style={{ height: ZONE_H, touchAction: "manipulation", transformStyle: "preserve-3d" }}
                 onClick={handleZoneClick}
+                onMouseMove={handleMouseMove}
+                onMouseLeave={handleMouseLeave}
               >
                 {/* Confetti */}
                 {showConfetti && <Confetti />}
 
-                {/* 2.5D amber bar */}
+                {/* Cursor indicator — vertical line + year bubble */}
+                {cursorRatio !== null && !validated && (
+                  <>
+                    <div
+                      className="pointer-events-none absolute"
+                      style={{
+                        left:      `${cursorRatio * 100}%`,
+                        top:       0,
+                        bottom:    0,
+                        width:     2,
+                        background: "rgba(245,158,11,0.65)",
+                        transform: "translateX(-50%)",
+                        zIndex:    25,
+                      }}
+                    />
+                    <div
+                      className="pointer-events-none absolute"
+                      style={{
+                        left:         `${cursorRatio * 100}%`,
+                        top:          8,
+                        transform:    "translateX(-50%)",
+                        background:   "#f59e0b",
+                        color:        "#030712",
+                        fontWeight:   700,
+                        fontSize:     12,
+                        padding:      "2px 8px",
+                        borderRadius: 999,
+                        whiteSpace:   "nowrap",
+                        zIndex:       26,
+                        boxShadow:    "0 2px 8px rgba(0,0,0,0.4)",
+                      }}
+                    >
+                      {hoverYear}
+                    </div>
+                  </>
+                )}
+
+                {/* 2.5D gaussian-bump bar */}
                 <div
-                  className="pointer-events-none absolute w-full"
+                  className="pointer-events-none absolute w-full overflow-hidden"
                   style={{
-                    top:             BAR_TOP,
-                    height:          BAR_H,
+                    top:             BAR_SVG_TOP,
+                    height:          BAR_MAX_H,
                     borderRadius:    12,
                     transform:       "rotateX(25deg)",
                     transformOrigin: "center center",
-                    background:      "linear-gradient(to right, #78350f 0%, #b45309 25%, #f59e0b 55%, #fcd34d 75%, #f59e0b 100%)",
-                    boxShadow:       "0 8px 32px rgba(245,158,11,0.35), 0 2px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.35)",
-                    overflow:        "hidden",
+                    boxShadow:       "0 8px 32px rgba(245,158,11,0.35), 0 2px 8px rgba(0,0,0,0.6)",
                   }}
                 >
-                  {/* Glass reflection */}
-                  <div
-                    style={{
-                      position:     "absolute",
-                      top: 0, left: 0, right: 0,
-                      height:       "45%",
-                      background:   "linear-gradient(to bottom, rgba(255,255,255,0.32), rgba(255,255,255,0))",
-                      borderRadius: "12px 12px 0 0",
-                      pointerEvents: "none",
-                    }}
-                  />
-                  {/* Tick marks */}
-                  {marks.map((y) => (
-                    <div
-                      key={y}
-                      className="absolute inset-y-0"
-                      style={{ left: `${pct(y, start, span)}%`, width: 1, background: "rgba(0,0,0,0.3)" }}
+                  <svg
+                    viewBox={`0 0 100 ${BAR_MAX_H}`}
+                    preserveAspectRatio="none"
+                    style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                  >
+                    <defs>
+                      <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%"   stopColor="#78350f" />
+                        <stop offset="25%"  stopColor="#b45309" />
+                        <stop offset="55%"  stopColor="#f59e0b" />
+                        <stop offset="75%"  stopColor="#fcd34d" />
+                        <stop offset="100%" stopColor="#f59e0b" />
+                      </linearGradient>
+                      <linearGradient id="glassGrad" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={BAR_MAX_H * 0.45}>
+                        <stop offset="0%"   stopColor="rgba(255,255,255,0.28)" />
+                        <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                      </linearGradient>
+                      <clipPath id="barClip">
+                        <path d={barPath} />
+                      </clipPath>
+                    </defs>
+                    <path
+                      d={barPath}
+                      fill="url(#barGrad)"
+                      style={{ transition: "d 0.15s ease" }}
                     />
-                  ))}
+                    <rect
+                      x="0" y="0" width="100" height={BAR_MAX_H * 0.45}
+                      fill="url(#glassGrad)"
+                      clipPath="url(#barClip)"
+                    />
+                    {/* Base tick marks inside bar */}
+                    {visibleBaseMarks.map(y => (
+                      <line
+                        key={`bt-${y}`}
+                        x1={dpct(y)} y1={0} x2={dpct(y)} y2={BAR_MAX_H}
+                        stroke="rgba(0,0,0,0.3)" strokeWidth="0.3"
+                        clipPath="url(#barClip)"
+                      />
+                    ))}
+                    {/* Fine tick marks inside bar */}
+                    {fineTickMarks.map(y => (
+                      <line
+                        key={`ft-${y}`}
+                        x1={dpct(y)} y1={0} x2={dpct(y)} y2={BAR_MAX_H}
+                        stroke="rgba(0,0,0,0.25)" strokeWidth="0.2"
+                        clipPath="url(#barClip)"
+                      />
+                    ))}
+                  </svg>
                 </div>
 
-                {/* 3D pillar ticks above bar */}
-                {marks.map((y) => (
+                {/* 3D pillar ticks above bar — base marks */}
+                {visibleBaseMarks.map(y => (
                   <div
-                    key={y}
+                    key={`bp-${y}`}
                     className="pointer-events-none absolute"
                     style={{
-                      left:            `${pct(y, start, span)}%`,
-                      top:             BAR_TOP - 22,
+                      left:            `${dpct(y)}%`,
+                      top:             BAR_SVG_TOP - 22,
                       width:           2,
                       height:          22,
                       transform:       "translateX(-50%) rotateX(25deg)",
                       transformOrigin: "bottom center",
                       background:      "linear-gradient(to top, #d97706, rgba(217,119,6,0))",
+                      transition:      hoverYear === null ? "left 0.2s ease" : "none",
+                    }}
+                  />
+                ))}
+                {/* 3D pillar ticks — fine marks */}
+                {fineTickMarks.map(y => (
+                  <div
+                    key={`fp-${y}`}
+                    className="pointer-events-none absolute"
+                    style={{
+                      left:            `${dpct(y)}%`,
+                      top:             BAR_SVG_TOP - 14,
+                      width:           1,
+                      height:          14,
+                      transform:       "translateX(-50%) rotateX(25deg)",
+                      transformOrigin: "bottom center",
+                      background:      "linear-gradient(to top, rgba(217,119,6,0.7), rgba(217,119,6,0))",
                     }}
                   />
                 ))}
 
-                {/* Year labels */}
+                {/* Year labels — base marks */}
                 <div
                   className="pointer-events-none absolute w-full"
-                  style={{ top: BAR_TOP + BAR_H + 10 }}
+                  style={{ top: BAR_CENTER_TOP + BAR_BASE_H / 2 + 10 }}
                 >
-                  {marks.map((y) => (
+                  {visibleBaseMarks.map(y => (
                     <span
-                      key={y}
+                      key={`bl-${y}`}
                       className="absolute -translate-x-1/2 text-xs font-medium text-gray-500"
-                      style={{ left: `${pct(y, start, span)}%` }}
+                      style={{ left: `${dpct(y)}%`, transition: hoverYear === null ? "left 0.2s ease" : "none" }}
+                    >
+                      {y}
+                    </span>
+                  ))}
+                  {/* Fine labels — every 10 years in zoom zone */}
+                  {fineLabelMarks.map(y => (
+                    <span
+                      key={`fl-${y}`}
+                      className="absolute -translate-x-1/2 text-xs font-semibold text-amber-400/80"
+                      style={{
+                        left:      `${dpct(y)}%`,
+                        animation: "label-fade-in 0.1s ease both",
+                      }}
                     >
                       {y}
                     </span>
                   ))}
                 </div>
 
-                {/* Pin anchor — bottom of this div = bar center */}
+                {/* Pin anchor — bottom of this div = bar centre */}
                 <div
                   className="pointer-events-none absolute w-full"
-                  style={{ bottom: ZONE_H - (BAR_TOP + BAR_H / 2), left: 0 }}
+                  style={{ bottom: PIN_ANCHOR_BOT, left: 0 }}
                 >
                   {guessedPct !== null && (
                     <PlayerPin
@@ -855,8 +1123,23 @@ export default function TimelineGame({
           </div>
         </div>
 
+        {/* Direct year input */}
+        {!validated && (
+          <div className="mx-auto mt-4 w-full max-w-5xl px-4 flex justify-center">
+            <input
+              type="number"
+              value={inputYear}
+              onChange={handleInputChange}
+              placeholder="Ou tape l'année directement..."
+              className="tl-no-spin w-72 rounded-xl border border-gray-700 bg-gray-900 px-4 py-2.5 text-center text-white placeholder-gray-600 outline-none transition-colors focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20"
+              min={start}
+              max={end}
+            />
+          </div>
+        )}
+
         {/* Feedback / validate button */}
-        <div className="mx-auto mt-5 w-full max-w-5xl px-4">
+        <div className="mx-auto mt-4 w-full max-w-5xl px-4">
           {validated ? (
             <p className="text-center text-sm text-gray-500">
               <span className="font-bold text-white">{event.title}</span>

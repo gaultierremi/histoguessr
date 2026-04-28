@@ -7,6 +7,7 @@ const supabase = createClient(
 );
 
 const BUCKET = "timeline-events";
+const BATCH_NAME = process.env.TIMELINE_IMPORT_BATCH || "manual_batch";
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -29,6 +30,79 @@ function getExtension(contentType) {
   if (contentType.includes("gif")) return "gif";
   if (contentType.includes("svg")) return "svg";
   return "jpg";
+}
+
+async function logImportError(event, reason) {
+  const title = event.title;
+  const year = event.year ?? null;
+
+  const { data: existing, error: findError } = await supabase
+    .from("timeline_import_errors")
+    .select("id, retry_count")
+    .eq("title", title)
+    .eq("year", year)
+    .maybeSingle();
+
+  if (findError) {
+    console.error(`⚠️ Impossible de vérifier l'erreur Supabase: ${findError.message}`);
+    return;
+  }
+
+  if (existing) {
+    const { error: updateError } = await supabase
+      .from("timeline_import_errors")
+      .update({
+        wiki: event.wiki || null,
+        match: event.match || null,
+        reason,
+        batch: BATCH_NAME,
+        status: "to_retry",
+        retry_count: (existing.retry_count || 0) + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", existing.id);
+
+    if (updateError) {
+      console.error(`⚠️ Impossible d'update l'erreur Supabase: ${updateError.message}`);
+    }
+
+    return;
+  }
+
+  const { error: insertError } = await supabase
+    .from("timeline_import_errors")
+    .insert({
+      title,
+      year,
+      wiki: event.wiki || null,
+      match: event.match || null,
+      reason,
+      batch: BATCH_NAME,
+      status: "to_retry",
+      retry_count: 1
+    });
+
+  if (insertError) {
+    console.error(`⚠️ Impossible d'insérer l'erreur Supabase: ${insertError.message}`);
+  }
+}
+
+async function markImportErrorResolved(event) {
+  const title = event.title;
+  const year = event.year ?? null;
+
+  const { error } = await supabase
+    .from("timeline_import_errors")
+    .update({
+      status: "resolved",
+      updated_at: new Date().toISOString()
+    })
+    .eq("title", title)
+    .eq("year", year);
+
+  if (error) {
+    console.error(`⚠️ Impossible de marquer l'erreur comme résolue: ${error.message}`);
+  }
 }
 
 async function getWikipediaImageUrl(pageTitle) {
@@ -81,6 +155,14 @@ async function downloadImage(url) {
 }
 
 async function main() {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    throw new Error("NEXT_PUBLIC_SUPABASE_URL manquant dans .env.local");
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY manquant dans .env.local");
+  }
+
   const raw = await fs.readFile("./timeline-images.json", "utf8");
   const events = JSON.parse(raw);
 
@@ -112,7 +194,6 @@ async function main() {
 
       const { data } = supabase.storage.from(BUCKET).getPublicUrl(filePath);
       const imageUrl = data.publicUrl;
-
       const match = event.match || event.title;
 
       const { data: existingRows, error: findError } = await supabase
@@ -134,6 +215,8 @@ async function main() {
 
         updatedCount += existingRows.length;
 
+        await markImportErrorResolved(event);
+
         console.log(`✅ UPDATE OK`);
         console.log(`   Rows updated: ${existingRows.length}`);
         console.log(`   URL: ${imageUrl}`);
@@ -154,16 +237,22 @@ async function main() {
 
         insertedCount++;
 
+        await markImportErrorResolved(event);
+
         console.log(`🆕 INSERT OK`);
         console.log(`   Title: ${event.title}`);
         console.log(`   URL: ${imageUrl}`);
       }
     } catch (err) {
       errorCount++;
-      console.error(`❌ Erreur pour ${event.title}: ${err.message}`);
+      const reason = err instanceof Error ? err.message : String(err);
+
+      console.error(`❌ Erreur pour ${event.title}: ${reason}`);
+
+      await logImportError(event, reason);
     }
 
-    await sleep(10000);
+    await sleep(5000);
   }
 
   console.log("\n========== RÉSUMÉ ==========");
