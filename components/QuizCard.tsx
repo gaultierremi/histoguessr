@@ -35,12 +35,47 @@ type AnswerRecord = {
 // ─── Cash validation ──────────────────────────────────────────────────────────
 
 function isCashCorrect(player: string, correct: string): boolean {
-  const norm = (s: string) => s.toLowerCase().trim();
-  const p = norm(player);
-  const c = norm(correct);
-  if (!p) return false;
-  if (c.includes(p) || p.includes(c)) return true;
-  return c.split(/\s+/).filter((w) => w.length >= 3).some((kw) => p.includes(kw));
+  const ABBREVS: [RegExp, string][] = [
+    [/\bste\b/g, "sainte"],
+    [/\bst\b/g,  "saint"],
+    [/\bdr\b/g,  "docteur"],
+    [/\bmr\b/g,  "monsieur"],
+    [/\bm\./g,   "monsieur"],
+    [/\bjc\b/g,  "jesus christ"],
+  ];
+
+  function normalize(s: string): string {
+    let r = s.toLowerCase().trim();
+    // Remove diacritics (é→e, è→e, ç→c, etc.)
+    r = r.normalize("NFD").replace(/[̀-ͯ]/g, "");
+    // Expand common abbreviations before stripping punctuation
+    for (const [pat, rep] of ABBREVS) r = r.replace(pat, rep);
+    // Unify hyphens/dashes to space (jean-baptiste → jean baptiste)
+    r = r.replace(/[-–—]/g, " ");
+    // Strip non-alphanumeric
+    r = r.replace(/[^a-z0-9\s]/g, " ");
+    // Remove articles and stop-words
+    r = r.replace(/\b(le|la|les|de|du|des|un|une|d|l)\b/g, " ");
+    return r.replace(/\s+/g, " ").trim();
+  }
+
+  const p = normalize(player);
+  const c = normalize(correct);
+
+  // Rule 0: single letter (or empty) → never accepted
+  if (!p || p.length < 2) return false;
+
+  // Rule 1: exact match after full normalisation
+  if (p === c) return true;
+
+  // Rule 2: phrase containment in either direction — min 4 chars
+  if (p.length >= 4 && (c.includes(p) || p.includes(c))) return true;
+
+  // Rule 3: a significant word (≥4 chars) from the correct answer
+  // must appear as a *complete word* in the player's answer
+  const correctWords = c.split(/\s+/).filter((w) => w.length >= 4);
+  const playerWords  = new Set(p.split(/\s+/));
+  return correctWords.some((kw) => playerWords.has(kw));
 }
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
