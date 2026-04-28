@@ -61,3 +61,20 @@ export type TimelineEvent = {
   fun_fact: string | null;
   created_at: string;
 };
+
+export type DailyChallenge = {
+  id: string;
+  date: string;
+  event_ids: string[];
+  created_at: string;
+};
+
+export type DailyScore = {
+  id: string;
+  challenge_id: string;
+  user_id: string;
+  user_name: string;
+  score: number;
+  max_score: number;
+  created_at: string;
+};

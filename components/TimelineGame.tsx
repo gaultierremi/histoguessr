@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import type { TimelineEvent } from "@/lib/types";
 import { calculateScore } from "@/lib/timeline";
 
@@ -647,9 +647,11 @@ function FinalScreen({ results, difficulty }: { results: PlacementResult[]; diff
 export default function TimelineGame({
   events,
   difficulty,
+  onComplete,
 }: {
-  events:     TimelineEvent[];
-  difficulty: 1 | 2 | 3;
+  events:      TimelineEvent[];
+  difficulty:  1 | 2 | 3;
+  onComplete?: (score: number, maxScore: number) => void;
 }) {
   const [step, setStep]               = useState(0);
   const [guessedYear, setGuessedYear] = useState<number | null>(null);
@@ -669,6 +671,15 @@ export default function TimelineGame({
   const done  = results.length === total;
 
   const { start, end, span, marks } = getTimeline(events);
+
+  // When onComplete is provided, call it instead of rendering FinalScreen
+  useEffect(() => {
+    if (done && onComplete) {
+      const totalScore = results.reduce((s, r) => s + r.score, 0);
+      onComplete(totalScore, results.length * 1000);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
 
   // ── Interactions ─────────────────────────────────────────────────────────────
 
@@ -799,7 +810,10 @@ export default function TimelineGame({
     [cursorRatio, validated],
   );
 
-  if (done) return <FinalScreen results={results} difficulty={difficulty} />;
+  if (done) {
+    if (onComplete) return null;
+    return <FinalScreen results={results} difficulty={difficulty} />;
+  }
 
   // ── Render ────────────────────────────────────────────────────────────────────
 

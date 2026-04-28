@@ -9,16 +9,18 @@ import {
   type DuelLeaderboardEntry,
   type RecentDuelRow,
 } from "@/lib/scores";
+import { getDailyLeaderboard, type DailyLeaderboardEntry } from "@/lib/daily";
 
 export const dynamic = "force-dynamic";
 
-const TABS = ["quiz", "duel", "recent"] as const;
+const TABS = ["quiz", "duel", "recent", "daily"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABELS: Record<Tab, string> = {
   quiz:   "Quiz",
   duel:   "Duel",
   recent: "Duels récents",
+  daily:  "Défi quotidien",
 };
 
 function Medal({ rank }: { rank: number }) {
@@ -113,6 +115,47 @@ function DuelTable({ rows }: { rows: DuelLeaderboardEntry[] }) {
   );
 }
 
+function DailyTable({ rows, date }: { rows: DailyLeaderboardEntry[]; date: string }) {
+  if (rows.length === 0) {
+    return (
+      <p className="px-6 py-12 text-center text-gray-500">
+        Aucun score pour le défi du {date}.
+      </p>
+    );
+  }
+  return (
+    <table className="w-full text-sm">
+      <thead>
+        <tr className="border-b border-gray-800 bg-gray-900/50 text-left text-xs uppercase tracking-wider text-gray-500">
+          <th className="px-4 py-3">#</th>
+          <th className="px-4 py-3">Joueur</th>
+          <th className="px-4 py-3 text-right">Score</th>
+          <th className="px-4 py-3 text-right">Max</th>
+          <th className="px-4 py-3 text-right">Heure</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row, i) => (
+          <tr
+            key={i}
+            className="border-b border-gray-800/50 last:border-0 transition-colors hover:bg-gray-900/40"
+          >
+            <td className="px-4 py-3.5 text-center">
+              <Medal rank={i} />
+            </td>
+            <td className="px-4 py-3.5 font-medium text-white">{row.user_name}</td>
+            <td className="px-4 py-3.5 text-right font-bold text-amber-400">{row.score}</td>
+            <td className="px-4 py-3.5 text-right text-gray-400">{row.max_score}</td>
+            <td className="px-4 py-3.5 text-right text-gray-500">
+              {new Date(row.submitted_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 function RecentList({ rows }: { rows: RecentDuelRow[] }) {
   if (rows.length === 0) {
     return (
@@ -172,11 +215,13 @@ export default async function ScoreboardPage({
     ? (searchParams.tab as Tab)
     : "quiz";
 
+  const today = new Date().toISOString().slice(0, 10);
   const supabase = createClient();
-  const [quizBoard, duelBoard, recentDuels] = await Promise.all([
+  const [quizBoard, duelBoard, recentDuels, dailyBoard] = await Promise.all([
     getQuizLeaderboard(supabase),
     getDuelLeaderboard(supabase),
     getRecentDuels(supabase),
+    getDailyLeaderboard(supabase, today),
   ]);
 
   return (
@@ -226,6 +271,15 @@ export default async function ScoreboardPage({
         )}
 
         {tab === "recent" && <RecentList rows={recentDuels} />}
+
+        {tab === "daily" && (
+          <div>
+            <p className="mb-3 text-xs text-gray-600">Défi du {today}</p>
+            <div className="overflow-hidden rounded-2xl border border-gray-800">
+              <DailyTable rows={dailyBoard} date={today} />
+            </div>
+          </div>
+        )}
       </div>
       </div>
     </main>
