@@ -60,7 +60,7 @@ function ModeSelect() {
       <div className="flex w-full max-w-md flex-col items-center gap-8">
         <div className="text-center">
           <span className="mb-4 inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-amber-400">
-            Mode Frise
+            Mode Ligne du temps
           </span>
           <h1 className="mt-4 text-4xl font-black tracking-tight text-white">
             Choisis ton mode
@@ -78,7 +78,7 @@ function ModeSelect() {
               <ArrowIcon />
             </div>
             <p className="text-sm text-gray-500">
-              Place chaque événement sur la frise. Plus tu es précis, plus tu marques de points.
+              Place chaque événement sur la ligne du temps. Plus tu es précis, plus tu marques de points.
             </p>
           </Link>
 

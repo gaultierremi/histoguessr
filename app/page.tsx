@@ -147,7 +147,7 @@ export default function Home() {
             href="/timeline"
             className="group inline-flex items-center gap-2 rounded-full border border-gray-700 px-10 py-3.5 text-base font-semibold text-gray-300 transition-all duration-200 hover:border-amber-500/50 hover:text-white active:scale-95"
           >
-            📅 Frise
+            📅 Ligne du temps
             <svg
               width="16"
               height="16"

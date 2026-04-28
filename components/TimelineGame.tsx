@@ -674,7 +674,7 @@ export default function TimelineGame({
             <div className="mb-3 flex items-center justify-between">
               <p className="text-sm text-gray-500">
                 {!validated && (guessedYear === null
-                  ? "Clique sur la frise pour placer l'événement"
+                  ? "Clique sur la ligne du temps pour placer l'événement"
                   : "Reclique pour ajuster, puis valide")}
               </p>
               {guessedYear !== null && !validated && (
