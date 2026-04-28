@@ -58,5 +58,6 @@ export type TimelineEvent = {
   difficulty: 1 | 2 | 3;
   status: "pending" | "approved" | "rejected";
   rejection_reason: string | null;
+  fun_fact: string | null;
   created_at: string;
 };

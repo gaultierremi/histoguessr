@@ -238,13 +238,17 @@ function EventCard({
   yearDiff,
   exiting,
   entering,
+  onNext,
+  isLastCard,
 }: {
-  event:    TimelineEvent;
-  flipped:  boolean;
-  score:    number | null;
-  yearDiff: number | null;
-  exiting:  boolean;
-  entering: boolean;
+  event:      TimelineEvent;
+  flipped:    boolean;
+  score:      number | null;
+  yearDiff:   number | null;
+  exiting:    boolean;
+  entering:   boolean;
+  onNext:     () => void;
+  isLastCard: boolean;
 }) {
   const [hover, setHover] = useState(false);
   const src = proxied(event.image_url);
@@ -421,25 +425,68 @@ function EventCard({
             background:                 score !== null ? backBg : "#111827",
             display:                    "flex",
             flexDirection:              "column",
-            alignItems:                 "center",
-            justifyContent:             "center",
-            gap:                        14,
-            padding:                    32,
+            padding:                    "24px 24px 20px",
           }}
         >
           {score !== null && yearDiff !== null && (
             <>
-              <p style={{ fontSize: 52, margin: 0, lineHeight: 1 }}>
-                {yearDiff === 0 ? "🎯" : yearDiff <= 20 ? "🏆" : yearDiff <= 100 ? "📍" : "😅"}
+              {/* Score + emoji */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
+                <span style={{ fontSize: 40, lineHeight: 1 }}>
+                  {score >= 900 ? "🎯" : score >= 600 ? "⭐" : "📍"}
+                </span>
+                <div style={{ lineHeight: 1 }}>
+                  <span style={{ fontSize: 52, fontWeight: 900, color: "#fbbf24" }}>
+                    {score}
+                  </span>
+                  <span style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", marginLeft: 5 }}>
+                    / 1000
+                  </span>
+                </div>
+              </div>
+
+              {/* Year diff */}
+              <p style={{ fontSize: 17, fontWeight: 600, color: "rgba(255,255,255,0.85)", margin: "0 0 12px" }}>
+                {yearDiff === 0 ? "Parfait !" : `À ${yearDiff} an${yearDiff > 1 ? "s" : ""} près`}
               </p>
-              <p style={{ fontSize: 18, fontWeight: 700, color: "#fff", margin: 0, textAlign: "center" }}>
-                {yearDiff === 0
-                  ? "Parfait !"
-                  : `${yearDiff} an${yearDiff > 1 ? "s" : ""} d'écart`}
-              </p>
-              <p style={{ fontSize: 44, fontWeight: 900, color: "#fbbf24", margin: 0, lineHeight: 1 }}>
-                +{score} pts
-              </p>
+
+              {/* Fun fact */}
+              {event.fun_fact ? (
+                <div style={{
+                  flex:       1,
+                  background: "rgba(245,158,11,0.1)",
+                  border:     "1px solid rgba(245,158,11,0.3)",
+                  borderRadius: 12,
+                  padding:    "12px 14px",
+                  marginBottom: 14,
+                  overflow:   "hidden",
+                }}>
+                  <p style={{ fontSize: 13, color: "rgba(255,255,255,0.82)", margin: 0, lineHeight: 1.55 }}>
+                    💡 {event.fun_fact}
+                  </p>
+                </div>
+              ) : (
+                <div style={{ flex: 1 }} />
+              )}
+
+              {/* Next button */}
+              <button
+                onClick={(e) => { e.stopPropagation(); onNext(); }}
+                style={{
+                  background:   "#f59e0b",
+                  borderRadius: 12,
+                  padding:      "13px 0",
+                  width:        "100%",
+                  fontWeight:   700,
+                  fontSize:     15,
+                  color:        "#030712",
+                  cursor:       "pointer",
+                  border:       "none",
+                  flexShrink:   0,
+                }}
+              >
+                {isLastCard ? "Voir les résultats →" : "Suivant →"}
+              </button>
             </>
           )}
         </div>
@@ -663,6 +710,8 @@ export default function TimelineGame({
             yearDiff={yearDiff}
             exiting={exiting}
             entering={entering}
+            onNext={handleNext}
+            isLastCard={step === total - 1}
           />
         </div>
 
@@ -809,44 +858,11 @@ export default function TimelineGame({
         {/* Feedback / validate button */}
         <div className="mx-auto mt-5 w-full max-w-5xl px-4">
           {validated ? (
-            <div
-              style={{
-                borderRadius: 16,
-                padding:      20,
-                border:       `1px solid ${
-                  yearDiff === 0           ? "#15803d"
-                  : (yearDiff ?? 999) <= 20  ? "#166534"
-                  : (yearDiff ?? 999) <= 100 ? "#92400e"
-                  :                            "#991b1b"
-                }`,
-                background:
-                  yearDiff === 0           ? "rgba(5,46,22,0.5)"
-                  : (yearDiff ?? 999) <= 20  ? "rgba(5,46,22,0.3)"
-                  : (yearDiff ?? 999) <= 100 ? "rgba(69,26,3,0.3)"
-                  :                            "rgba(69,10,10,0.3)",
-              }}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-xl font-black text-white">
-                    {yearDiff === 0
-                      ? "Parfait !"
-                      : `${yearDiff} an${(yearDiff ?? 0) > 1 ? "s" : ""} d'écart`}
-                  </p>
-                  <p className="mt-0.5 text-sm text-gray-400">
-                    L&apos;événement date de{" "}
-                    <span className="font-bold text-white">{event.year}</span>
-                  </p>
-                  <p className="mt-2 text-3xl font-black text-amber-400">+{currentScore} pts</p>
-                </div>
-                <button
-                  onClick={handleNext}
-                  className="shrink-0 rounded-xl bg-amber-500 px-6 py-3 font-bold text-gray-950 transition-colors hover:bg-amber-400"
-                >
-                  {step < total - 1 ? "Suivant →" : "Résultats →"}
-                </button>
-              </div>
-            </div>
+            <p className="text-center text-sm text-gray-500">
+              <span className="font-bold text-white">{event.title}</span>
+              {" — "}
+              <span className="font-bold text-amber-400">{event.year}</span>
+            </p>
           ) : (
             <button
               onClick={handleValidate}
