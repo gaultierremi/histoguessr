@@ -6,7 +6,7 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-browser";
 import Header from "@/components/Header";
 import { ADMIN_EMAILS, VALIDATOR_EMAILS, ALL_ADMIN_EMAILS } from "@/lib/admin-config";
-import type { Question, QuestionStatus, QuizQuestion, QuizQuestionStatus } from "@/lib/types";
+import type { Question, QuizQuestion, QuizQuestionStatus, TimelineEvent } from "@/lib/types";
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -26,6 +26,22 @@ const EMPTY_FORM: FormState = {
   difficulty: "1",
   imageFile: null,
   imagePreview: null,
+};
+
+type TimelineFormState = {
+  title: string;
+  description: string;
+  year: string;
+  category: string;
+  image_url: string;
+};
+
+const EMPTY_TIMELINE_FORM: TimelineFormState = {
+  title: "",
+  description: "",
+  year: "",
+  category: "",
+  image_url: "",
 };
 
 // QuizQuestionStatus is a superset of QuestionStatus — one map covers both
@@ -86,12 +102,22 @@ function AccessDenied({ email }: { email: string }) {
 
 // ─── Creator view ─────────────────────────────────────────────────────────────
 
+type CreatorTab = "anachronisme" | "timeline";
+
 function CreatorView({ supabase }: { supabase: SupabaseClient }) {
+  const [creatorTab, setCreatorTab] = useState<CreatorTab>("anachronisme");
+
+  // ── Anachronisme state ──
   const [questions, setQuestions] = useState<Question[]>([]);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Timeline state ──
+  const [timelineForm, setTimelineForm] = useState<TimelineFormState>(EMPTY_TIMELINE_FORM);
+  const [timelineSubmitting, setTimelineSubmitting] = useState(false);
+  const [timelineMessage, setTimelineMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const fetchQuestions = useCallback(async () => {
     const { data } = await supabase
@@ -166,131 +192,262 @@ function CreatorView({ supabase }: { supabase: SupabaseClient }) {
     fetchQuestions();
   }
 
+  async function handleTimelineSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const yearNum = parseInt(timelineForm.year, 10);
+    if (isNaN(yearNum)) { setTimelineMessage({ ok: false, text: "L\'année doit être un nombre." }); return; }
+    setTimelineSubmitting(true);
+    setTimelineMessage(null);
+
+    const { error } = await supabase.from("timeline_events").insert({
+      title: timelineForm.title.trim(),
+      description: timelineForm.description.trim() || null,
+      year: yearNum,
+      category: timelineForm.category.trim() || null,
+      image_url: timelineForm.image_url.trim() || null,
+      status: "pending",
+      difficulty: 1,
+    });
+
+    if (error) {
+      setTimelineMessage({ ok: false, text: `Erreur DB : ${error.message}` });
+    } else {
+      setTimelineMessage({ ok: true, text: "Événement soumis — en attente de validation." });
+      setTimelineForm(EMPTY_TIMELINE_FORM);
+    }
+    setTimelineSubmitting(false);
+  }
+
+  const creatorTabs: { id: CreatorTab; label: string }[] = [
+    { id: "anachronisme", label: "Anachronisme" },
+    { id: "timeline",     label: "Ligne du temps" },
+  ];
+
   return (
-    <div className="space-y-10">
-      <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 sm:p-6">
-        <h2 className="mb-5 text-base font-bold text-white">Soumettre une question</h2>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">
-              Image <span className="text-amber-400">*</span>
-            </label>
-            {form.imagePreview ? (
-              <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-gray-700">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={form.imagePreview} alt="Aperçu" className="h-full w-full object-cover" />
-                <button type="button" onClick={clearImage}
-                  className="absolute right-2 top-2 rounded-full bg-gray-950/80 px-3 py-1 text-xs text-gray-300 backdrop-blur-sm hover:text-white">
-                  ✕ Changer
-                </button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => fileInputRef.current?.click()}
-                className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-700 bg-gray-950 text-gray-500 transition-colors hover:border-amber-500/40 hover:text-gray-400">
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
-                </svg>
-                <span className="text-sm">Cliquer pour choisir une image</span>
-                <span className="text-xs text-gray-600">JPG, PNG, WEBP</span>
-              </button>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">
-              Anachronisme <span className="text-amber-400">*</span>
-            </label>
-            <input type="text" value={form.answer} required
-              onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
-              placeholder="ex : montre connectée, panneau solaire…"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">
-              Période <span className="text-amber-400">*</span>
-            </label>
-            <input type="text" value={form.period} required
-              onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
-              placeholder="ex : Moyen Âge, XVIIe siècle…"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">
-              Indice <span className="text-xs font-normal text-gray-500">(optionnel)</span>
-            </label>
-            <input type="text" value={form.hint}
-              onChange={(e) => setForm((f) => ({ ...f, hint: e.target.value }))}
-              placeholder="ex : Regarde attentivement son poignet"
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
-          </div>
-
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulté</label>
-            <select value={form.difficulty}
-              onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
-              className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none">
-              <option value="1">1 — Facile</option>
-              <option value="2">2 — Moyen</option>
-              <option value="3">3 — Expert</option>
-            </select>
-          </div>
-
-          {message && (
-            <p className={`text-sm ${message.ok ? "text-green-400" : "text-red-400"}`}>
-              {message.ok ? "✓" : "✕"} {message.text}
-            </p>
-          )}
-
-          <button type="submit" disabled={submitting}
-            className="w-full rounded-full bg-amber-500 py-3 text-sm font-bold text-gray-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
-            {submitting ? "Envoi en cours…" : "Soumettre pour validation"}
+    <div className="space-y-6">
+      {/* Tab bar */}
+      <div className="flex gap-1 rounded-xl border border-gray-800 bg-gray-900 p-1">
+        {creatorTabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setCreatorTab(tab.id)}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-colors ${
+              creatorTab === tab.id
+                ? "bg-amber-500 text-gray-950"
+                : "text-gray-400 hover:text-white"
+            }`}
+          >
+            {tab.label}
           </button>
-        </form>
-      </section>
+        ))}
+      </div>
 
-      <section className="pb-12">
-        <h2 className="mb-4 text-base font-bold text-white">
-          Mes questions <span className="text-sm font-normal text-gray-500">({questions.length})</span>
-        </h2>
-        {questions.length === 0 ? (
-          <p className="text-sm text-gray-600">Aucune question soumise.</p>
-        ) : (
-          <ul className="space-y-3">
-            {questions.map((q) => (
-              <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-3">
-                <div className="flex items-center gap-3">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={q.image_url} alt={q.answer} className="h-14 w-20 flex-shrink-0 rounded-lg object-cover sm:h-16 sm:w-24" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-white">{q.answer}</p>
-                    <p className="truncate text-xs text-gray-500">{q.period ?? "—"}</p>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <StatusBadge status={q.status as QuizQuestionStatus} />
-                      <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-                        Diff. {q.difficulty ?? "?"}
-                      </span>
-                    </div>
+      {creatorTab === "anachronisme" ? (
+        <div className="space-y-10">
+          <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 sm:p-6">
+            <h2 className="mb-5 text-base font-bold text-white">Soumettre une question</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Image <span className="text-amber-400">*</span>
+                </label>
+                {form.imagePreview ? (
+                  <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-gray-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={form.imagePreview} alt="Aperçu" className="h-full w-full object-cover" />
+                    <button type="button" onClick={clearImage}
+                      className="absolute right-2 top-2 rounded-full bg-gray-950/80 px-3 py-1 text-xs text-gray-300 backdrop-blur-sm hover:text-white">
+                      ✕ Changer
+                    </button>
                   </div>
-                  <button onClick={() => handleDelete(q)}
-                    className="flex-shrink-0 rounded-lg border border-red-900/40 px-3 py-1.5 text-xs text-red-500 transition-colors hover:border-red-500/60 hover:text-red-400">
-                    Supprimer
+                ) : (
+                  <button type="button" onClick={() => fileInputRef.current?.click()}
+                    className="flex aspect-video w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-700 bg-gray-950 text-gray-500 transition-colors hover:border-amber-500/40 hover:text-gray-400">
+                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" />
+                    </svg>
+                    <span className="text-sm">Cliquer pour choisir une image</span>
+                    <span className="text-xs text-gray-600">JPG, PNG, WEBP</span>
                   </button>
-                </div>
-                {q.status === "rejected" && q.rejection_reason && (
-                  <div className="mt-2.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
-                    <p className="text-xs text-red-400">
-                      <span className="font-semibold">Motif de refus : </span>{q.rejection_reason}
-                    </p>
+                )}
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Anachronisme <span className="text-amber-400">*</span>
+                </label>
+                <input type="text" value={form.answer} required
+                  onChange={(e) => setForm((f) => ({ ...f, answer: e.target.value }))}
+                  placeholder="ex : montre connectée, panneau solaire…"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Période <span className="text-amber-400">*</span>
+                </label>
+                <input type="text" value={form.period} required
+                  onChange={(e) => setForm((f) => ({ ...f, period: e.target.value }))}
+                  placeholder="ex : Moyen Âge, XVIIe siècle…"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Indice <span className="text-xs font-normal text-gray-500">(optionnel)</span>
+                </label>
+                <input type="text" value={form.hint}
+                  onChange={(e) => setForm((f) => ({ ...f, hint: e.target.value }))}
+                  placeholder="ex : Regarde attentivement son poignet"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">Difficulté</label>
+                <select value={form.difficulty}
+                  onChange={(e) => setForm((f) => ({ ...f, difficulty: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none">
+                  <option value="1">1 — Facile</option>
+                  <option value="2">2 — Moyen</option>
+                  <option value="3">3 — Expert</option>
+                </select>
+              </div>
+
+              {message && (
+                <p className={`text-sm ${message.ok ? "text-green-400" : "text-red-400"}`}>
+                  {message.ok ? "✓" : "✕"} {message.text}
+                </p>
+              )}
+
+              <button type="submit" disabled={submitting}
+                className="w-full rounded-full bg-amber-500 py-3 text-sm font-bold text-gray-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
+                {submitting ? "Envoi en cours…" : "Soumettre pour validation"}
+              </button>
+            </form>
+          </section>
+
+          <section className="pb-12">
+            <h2 className="mb-4 text-base font-bold text-white">
+              Mes questions <span className="text-sm font-normal text-gray-500">({questions.length})</span>
+            </h2>
+            {questions.length === 0 ? (
+              <p className="text-sm text-gray-600">Aucune question soumise.</p>
+            ) : (
+              <ul className="space-y-3">
+                {questions.map((q) => (
+                  <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-3">
+                    <div className="flex items-center gap-3">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={q.image_url} alt={q.answer} className="h-14 w-20 flex-shrink-0 rounded-lg object-cover sm:h-16 sm:w-24" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-white">{q.answer}</p>
+                        <p className="truncate text-xs text-gray-500">{q.period ?? "—"}</p>
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                          <StatusBadge status={q.status as QuizQuestionStatus} />
+                          <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+                            Diff. {q.difficulty ?? "?"}
+                          </span>
+                        </div>
+                      </div>
+                      <button onClick={() => handleDelete(q)}
+                        className="flex-shrink-0 rounded-lg border border-red-900/40 px-3 py-1.5 text-xs text-red-500 transition-colors hover:border-red-500/60 hover:text-red-400">
+                        Supprimer
+                      </button>
+                    </div>
+                    {q.status === "rejected" && q.rejection_reason && (
+                      <div className="mt-2.5 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
+                        <p className="text-xs text-red-400">
+                          <span className="font-semibold">Motif de refus : </span>{q.rejection_reason}
+                        </p>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      ) : (
+        <div className="pb-12">
+          <section className="rounded-2xl border border-gray-800 bg-gray-900 p-5 sm:p-6">
+            <h2 className="mb-5 text-base font-bold text-white">Soumettre un événement</h2>
+            <form onSubmit={handleTimelineSubmit} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Titre <span className="text-amber-400">*</span>
+                </label>
+                <input type="text" value={timelineForm.title} required
+                  onChange={(e) => setTimelineForm((f) => ({ ...f, title: e.target.value }))}
+                  placeholder="ex : Prise de la Bastille"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Description <span className="text-xs font-normal text-gray-500">(optionnel)</span>
+                </label>
+                <textarea value={timelineForm.description} rows={3}
+                  onChange={(e) => setTimelineForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="Courte description de l'événement…"
+                  className="w-full resize-none rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Année <span className="text-amber-400">*</span>{" "}
+                  <span className="text-xs font-normal text-gray-500">(négatif pour av. J.-C.)</span>
+                </label>
+                <input type="number" value={timelineForm.year} required
+                  onChange={(e) => setTimelineForm((f) => ({ ...f, year: e.target.value }))}
+                  placeholder="ex : 1789 ou -52"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  Catégorie <span className="text-xs font-normal text-gray-500">(optionnel)</span>
+                </label>
+                <input type="text" value={timelineForm.category}
+                  onChange={(e) => setTimelineForm((f) => ({ ...f, category: e.target.value }))}
+                  placeholder="ex : Révolutions, Guerre, Science…"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-gray-300">
+                  URL de l&apos;image <span className="text-xs font-normal text-gray-500">(optionnel)</span>
+                </label>
+                <input type="url" value={timelineForm.image_url}
+                  onChange={(e) => setTimelineForm((f) => ({ ...f, image_url: e.target.value }))}
+                  placeholder="https://…"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none" />
+                {timelineForm.image_url && (
+                  <div className="mt-2 overflow-hidden rounded-lg border border-gray-700">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/image-proxy?url=${encodeURIComponent(timelineForm.image_url)}`}
+                      alt="Aperçu"
+                      className="h-32 w-full object-cover"
+                    />
                   </div>
                 )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+              </div>
+
+              {timelineMessage && (
+                <p className={`text-sm ${timelineMessage.ok ? "text-green-400" : "text-red-400"}`}>
+                  {timelineMessage.ok ? "✓" : "✕"} {timelineMessage.text}
+                </p>
+              )}
+
+              <button type="submit" disabled={timelineSubmitting}
+                className="w-full rounded-full bg-amber-500 py-3 text-sm font-bold text-gray-950 transition-all hover:bg-amber-400 disabled:cursor-not-allowed disabled:opacity-50">
+                {timelineSubmitting ? "Envoi en cours…" : "Soumettre pour validation"}
+              </button>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
@@ -534,9 +691,130 @@ function QuizValidator({ supabase }: { supabase: SupabaseClient }) {
   );
 }
 
+// ─── Timeline validator ───────────────────────────────────────────────────────
+
+function TimelineValidator({ supabase }: { supabase: SupabaseClient }) {
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const fetchPending = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from("timeline_events")
+      .select("*")
+      .eq("status", "pending")
+      .order("year", { ascending: true });
+    if (data) setEvents(data as TimelineEvent[]);
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => { fetchPending(); }, [fetchPending]);
+
+  async function handleApprove(id: string, difficulty: 1 | 2 | 3) {
+    await supabase.from("timeline_events").update({ status: "approved", difficulty }).eq("id", id);
+    fetchPending();
+  }
+
+  async function handleReject(id: string) {
+    if (!rejectReason.trim()) return;
+    await supabase.from("timeline_events").update({
+      status: "rejected",
+      rejection_reason: rejectReason.trim(),
+    }).eq("id", id);
+    setRejectingId(null);
+    setRejectReason("");
+    fetchPending();
+  }
+
+  if (loading) return (
+    <div className="flex justify-center py-10">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+    </div>
+  );
+
+  if (events.length === 0) return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
+      <p className="text-sm text-gray-500">Aucun événement en attente de validation.</p>
+    </div>
+  );
+
+  const DIFFICULTY_LABELS: Record<1 | 2 | 3, string> = {
+    1: "⭐ Débutant",
+    2: "⭐⭐ Pro",
+    3: "⭐⭐⭐ Expert",
+  };
+
+  return (
+    <ul className="space-y-4">
+      {events.map((ev) => (
+        <li key={ev.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
+          <div className="flex items-start gap-4">
+            {ev.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={`/api/image-proxy?url=${encodeURIComponent(ev.image_url)}`}
+                alt={ev.title}
+                className="h-20 w-28 flex-shrink-0 rounded-lg object-cover sm:h-24 sm:w-36"
+              />
+            )}
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-white">{ev.title}</p>
+              <p className="mt-0.5 font-mono text-sm text-amber-400">
+                {ev.year < 0 ? `${Math.abs(ev.year)} av. J.-C.` : ev.year}
+              </p>
+              {ev.description && (
+                <p className="mt-1 line-clamp-3 text-xs text-gray-400">{ev.description}</p>
+              )}
+              {ev.category && (
+                <p className="mt-1 text-xs text-gray-600">{ev.category}</p>
+              )}
+            </div>
+          </div>
+
+          {rejectingId === ev.id ? (
+            <div className="mt-4 space-y-2">
+              <textarea autoFocus value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Motif du refus…" rows={2}
+                className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none" />
+              <div className="flex gap-2">
+                <button onClick={() => handleReject(ev.id)} disabled={!rejectReason.trim()}
+                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40">
+                  Confirmer le refus
+                </button>
+                <button onClick={() => setRejectingId(null)}
+                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+                  Annuler
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 space-y-2">
+              <div className="flex gap-2">
+                {([1, 2, 3] as const).map((d) => (
+                  <button key={d} onClick={() => handleApprove(ev.id, d)}
+                    className="flex-1 rounded-lg bg-green-600/20 py-2 text-xs font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30">
+                    {DIFFICULTY_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => { setRejectingId(ev.id); setRejectReason(""); }}
+                className="w-full rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20">
+                ✕ Refuser
+              </button>
+            </div>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ─── Validator view (with tabs) ───────────────────────────────────────────────
 
-type ValidatorTab = "anachronismes" | "quiz";
+type ValidatorTab = "anachronismes" | "quiz" | "timeline";
 
 function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
   const [activeTab, setActiveTab] = useState<ValidatorTab>("anachronismes");
@@ -544,6 +822,7 @@ function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
   const tabs: { id: ValidatorTab; label: string }[] = [
     { id: "anachronismes", label: "Anachronismes" },
     { id: "quiz",          label: "Quiz" },
+    { id: "timeline",      label: "Ligne du temps" },
   ];
 
   return (
@@ -565,10 +844,9 @@ function ValidatorView({ supabase }: { supabase: SupabaseClient }) {
         ))}
       </div>
 
-      {activeTab === "anachronismes"
-        ? <AnachronismeValidator supabase={supabase} />
-        : <QuizValidator supabase={supabase} />
-      }
+      {activeTab === "anachronismes" && <AnachronismeValidator supabase={supabase} />}
+      {activeTab === "quiz" && <QuizValidator supabase={supabase} />}
+      {activeTab === "timeline" && <TimelineValidator supabase={supabase} />}
     </div>
   );
 }
