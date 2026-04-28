@@ -11,7 +11,7 @@ export async function getTimelineEvents(
 ): Promise<TimelineEvent[]> {
   const { data, error } = await supabase
     .from("timeline_events")
-    .select("id, title, description, year, image_url, category, difficulty, status, rejection_reason, created_at")
+    .select("id, title, description, year, image_url, category, difficulty, status, rejection_reason, created_at, fun_fact")
     .eq("status", "approved")
     .eq("difficulty", difficulty)
     .limit(100);
