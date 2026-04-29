@@ -211,14 +211,9 @@ export default async function Home() {
             <p className="text-xs uppercase tracking-widest text-gray-600">Modes de jeu</p>
             <Link
               href="/timeline"
-              className="group relative flex min-h-[160px] flex-col justify-between rounded-2xl border border-amber-500/50 bg-gray-900 p-5 transition-all hover:border-amber-500/80 hover:bg-gray-800/80 active:scale-[0.98]"
+              className="group flex min-h-[160px] flex-col justify-between rounded-2xl border border-amber-500/50 bg-gray-900 p-5 transition-all hover:border-amber-500/80 hover:bg-gray-800/80 active:scale-[0.98]"
             >
-              {/* Badge */}
-              <span className="absolute right-4 top-4 rounded-full border border-amber-500/40 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-400">
-                🎯 Jeu principal
-              </span>
-
-              <div className="flex flex-col gap-2">
+<div className="flex flex-col gap-2">
                 <span className="text-4xl leading-none">📅</span>
                 <div>
                   <p className="text-lg font-black text-white">Ligne du temps</p>
