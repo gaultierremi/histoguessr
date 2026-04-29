@@ -75,10 +75,10 @@ function SetupView({
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-8 py-16">
       <div className="text-center">
         <span className="mb-4 inline-block rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1 text-xs font-semibold uppercase tracking-widest text-amber-400">
-          Mode Duel
+          Mode Multi-joueurs
         </span>
         <h1 className="mt-4 text-4xl font-black tracking-tight text-white">
-          Défie un ami
+          Affronte un ami
         </h1>
         <p className="mt-2 text-gray-400">10 questions, même temps, meilleur score gagne</p>
       </div>
@@ -235,7 +235,7 @@ function ResultsView({
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col items-center gap-8 py-16 text-center">
-      <p className="text-xs uppercase tracking-widest text-gray-500">Résultats du duel</p>
+      <p className="text-xs uppercase tracking-widest text-gray-500">Résultats du match</p>
 
       <p className={`text-3xl font-black ${isTied ? "text-gray-300" : iWon ? "text-amber-400" : "text-gray-400"}`}>
         {isTied ? "Égalité !" : iWon ? "Tu as gagné !" : "Tu as perdu…"}

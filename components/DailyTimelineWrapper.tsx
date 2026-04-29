@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import TimelineGame from "@/components/TimelineGame";
 import { saveDailyScore } from "@/lib/daily";
+import { updateStreakClient } from "@/lib/profile";
 import type { TimelineEvent } from "@/lib/types";
 
 type Props = {
@@ -20,7 +21,10 @@ export default function DailyTimelineWrapper({ events, challengeId, userId, user
 
   async function handleComplete(score: number, maxScore: number) {
     setSaving(true);
-    await saveDailyScore(userId, userName, challengeId, score, maxScore);
+    await Promise.all([
+      saveDailyScore(userId, userName, challengeId, score, maxScore),
+      updateStreakClient(userId),
+    ]);
     setSaving(false);
     setSaved(true);
     setResult({ score, maxScore });
