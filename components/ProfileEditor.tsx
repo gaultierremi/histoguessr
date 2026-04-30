@@ -9,6 +9,8 @@ import {
   SKINS,
 } from "@/lib/skins";
 import { updateProfileClient, type UserStats } from "@/lib/profile";
+import { TITLES, getTitleById } from "@/lib/titles";
+import { BADGES, getBadgeById } from "@/lib/badges";
 
 const AVATAR_COLORS = [
   "#f59e0b",
@@ -22,16 +24,6 @@ const AVATAR_COLORS = [
   "#eab308",
   "#78716c",
 ];
-
-function getHistoricalTitle(profile: UserStats): string {
-  if (profile.streak >= 7) return "Gardien du temps";
-  if (profile.total_games >= 100) return "Légende historique";
-  if (profile.favorite_mode === "Ligne du temps") return "Chronomancien";
-  if (profile.favorite_mode === "Quiz") return "Archiviste";
-  if (profile.total_games >= 50) return "Maître historien";
-  if (profile.total_games >= 10) return "Apprenti érudit";
-  return "Explorateur du passé";
-}
 
 function formatUnlockCondition(condition: string): string {
   switch (condition) {
@@ -64,20 +56,30 @@ function formatUnlockCondition(condition: string): string {
   }
 }
 
+type EditableProfile = UserStats & {
+  unlocked_titles?: string[];
+  active_title?: string;
+  unlocked_badges?: string[];
+  featured_badge?: string | null;
+};
+
 export default function ProfileEditor({
   initialProfile,
 }: {
-  initialProfile: UserStats;
+  initialProfile: EditableProfile;
 }) {
-  const [profile, setProfile] = useState(initialProfile);
+  const [profile, setProfile] = useState<EditableProfile>(initialProfile);
   const [userName, setUserName] = useState(initialProfile.user_name);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const level = getLevelInfo(profile.total_games);
   const activeSkin = getSkinById(profile.active_skin);
-  const historicalTitle = getHistoricalTitle(profile);
+  const activeTitle = getTitleById(profile.active_title);
+  const featuredBadge = getBadgeById(profile.featured_badge);
 
+  const unlockedTitles = profile.unlocked_titles ?? ["explorer"];
+  const unlockedBadges = profile.unlocked_badges ?? [];
   const unlockedCount = SKINS.filter((skin) =>
     isSkinUnlocked(skin.id, profile.unlocked_skins)
   ).length;
@@ -90,6 +92,8 @@ export default function ProfileEditor({
     user_name?: string;
     avatar_color?: string;
     active_skin?: string;
+    active_title?: string;
+    featured_badge?: string | null;
   }) {
     try {
       setSaving(true);
@@ -100,14 +104,18 @@ export default function ProfileEditor({
         ...(updates?.user_name === undefined && hasChanges
           ? { user_name: userName }
           : {}),
-      });
+      } as any);
 
       setProfile({
         ...profile,
         ...nextProfile,
+        ...updates,
       });
 
-      setUserName(nextProfile.user_name);
+      if (nextProfile.user_name) {
+        setUserName(nextProfile.user_name);
+      }
+
       setMessage("Profil mis à jour ✅");
     } catch (error) {
       console.error(error);
@@ -147,9 +155,15 @@ export default function ProfileEditor({
               {profile.user_name}
             </h1>
 
-            <p className="mt-2 text-lg font-bold text-slate-700">
-              {historicalTitle}
+            <p className="mt-2 text-lg font-black text-amber-600">
+              {activeTitle.name}
             </p>
+
+            {featuredBadge && (
+              <p className="mt-1 text-sm font-bold text-slate-600">
+                {featuredBadge.emoji} Badge affiché : {featuredBadge.name}
+              </p>
+            )}
 
             <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
               Skin actif :{" "}
@@ -191,7 +205,7 @@ export default function ProfileEditor({
         <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
           <h2 className="text-xl font-black text-slate-900">Identité</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Choisis ton pseudo et ta couleur principale.
+            Choisis ton pseudo, ta couleur, ton titre et ton badge affiché.
           </p>
 
           <label className="mt-6 block">
@@ -244,16 +258,77 @@ export default function ProfileEditor({
             </div>
           </div>
 
-          <div className="mt-8 rounded-3xl bg-slate-50 p-4">
-            <p className="text-sm font-black text-slate-800">
-              Identité historique
-            </p>
-            <p className="mt-1 text-2xl font-black text-amber-600">
-              {historicalTitle}
-            </p>
-            <p className="mt-2 text-sm text-slate-500">
-              Ce titre évolue selon ton activité, ton streak et ton mode favori.
-            </p>
+          <div className="mt-8">
+            <h3 className="text-sm font-bold text-slate-700">Titre actif</h3>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {TITLES.map((title) => {
+                const unlocked = unlockedTitles.includes(title.id);
+                const selected = profile.active_title === title.id;
+
+                return (
+                  <button
+                    key={title.id}
+                    type="button"
+                    disabled={!unlocked || saving}
+                    onClick={() => saveProfile({ active_title: title.id })}
+                    className={`rounded-2xl border p-3 text-left transition ${
+                      selected
+                        ? "border-amber-400 bg-amber-50 ring-4 ring-amber-100"
+                        : unlocked
+                        ? "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50"
+                        : "border-slate-200 bg-slate-50 opacity-50"
+                    }`}
+                  >
+                    <p className="font-black text-slate-900">
+                      {unlocked ? title.name : "🔒 " + title.name}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {title.description}
+                    </p>
+                    <p className="mt-2 text-xs font-bold uppercase text-slate-400">
+                      {title.rarity}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="mt-8">
+            <h3 className="text-sm font-bold text-slate-700">
+              Badge affiché
+            </h3>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {BADGES.map((badge) => {
+                const unlocked = unlockedBadges.includes(badge.id);
+                const selected = profile.featured_badge === badge.id;
+
+                return (
+                  <button
+                    key={badge.id}
+                    type="button"
+                    disabled={!unlocked || saving}
+                    onClick={() => saveProfile({ featured_badge: badge.id })}
+                    className={`rounded-2xl border p-3 text-left transition ${
+                      selected
+                        ? "border-amber-400 bg-amber-50 ring-4 ring-amber-100"
+                        : unlocked
+                        ? "border-slate-200 bg-white hover:border-amber-300 hover:bg-amber-50"
+                        : "border-slate-200 bg-slate-50 opacity-50"
+                    }`}
+                  >
+                    <p className="font-black text-slate-900">
+                      {unlocked ? badge.emoji : "🔒"} {badge.name}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {badge.description}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -339,11 +414,9 @@ export default function ProfileEditor({
                           {getRarityLabel(skin.rarity)}
                         </span>
 
-                        {"period" in skin && skin.period && (
-                          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">
-                            {skin.period}
-                          </span>
-                        )}
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">
+                          {skin.period}
+                        </span>
                       </div>
                     </div>
                   </div>
