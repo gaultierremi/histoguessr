@@ -26,3 +26,12 @@
     filter: blur(6px);
   }
 }
+
+@keyframes ticker {
+  0% {
+    transform: translateX(100vw);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
