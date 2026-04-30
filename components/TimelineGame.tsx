@@ -664,7 +664,9 @@ export default function TimelineGame({
   const [cursorRatio, setCursorRatio] = useState<number | null>(null);
   const [inputYear, setInputYear]     = useState<string>("");
   const [isMobile, setIsMobile]       = useState(false);
+  const [isYearEditing, setIsYearEditing] = useState(false);
   const zoneRef = useRef<HTMLDivElement>(null);
+  const yearInputRef = useRef<HTMLInputElement>(null);
 
   const total = events.length;
   const event = events[step];
@@ -675,6 +677,13 @@ export default function TimelineGame({
   useEffect(() => {
     setIsMobile(window.innerWidth < 768);
   }, []);
+
+  useEffect(() => {
+    if (isYearEditing && yearInputRef.current) {
+      yearInputRef.current.focus();
+      yearInputRef.current.select();
+    }
+  }, [isYearEditing]);
 
   // When onComplete is provided, call it instead of rendering FinalScreen
   useEffect(() => {
@@ -761,6 +770,7 @@ export default function TimelineGame({
         setHoverYear(null);
         setCursorRatio(null);
         setInputYear("");
+        setIsYearEditing(false);
         setExiting(false);
         setEntering(true);
         setTimeout(() => setEntering(false), 500);
@@ -908,9 +918,58 @@ export default function TimelineGame({
         {isMobile && !validated && (
           <div className="mx-auto mt-6 w-full max-w-md px-6 flex flex-col items-center gap-6">
             <div className="text-center">
-              <span style={{ fontSize: 72, fontWeight: 900, color: "#f59e0b", lineHeight: 1 }}>
-                {guessedYear ?? Math.round((start + end) / 2)}
-              </span>
+              {isYearEditing ? (
+                <input
+                  ref={yearInputRef}
+                  type="number"
+                  inputMode="numeric"
+                  className="tl-no-spin"
+                  value={inputYear}
+                  style={{
+                    fontSize:     72,
+                    fontWeight:   900,
+                    color:        "#f59e0b",
+                    lineHeight:   1,
+                    background:   "transparent",
+                    border:       "none",
+                    borderBottom: "2px solid #f59e0b",
+                    outline:      "none",
+                    textAlign:    "center",
+                    width:        "6ch",
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setInputYear(val);
+                    const parsed = parseInt(val, 10);
+                    if (!isNaN(parsed)) {
+                      setGuessedYear(Math.max(start, Math.min(end, parsed)));
+                    }
+                  }}
+                  onBlur={() => {
+                    const parsed = parseInt(inputYear, 10);
+                    const clamped = isNaN(parsed)
+                      ? (guessedYear ?? Math.round((start + end) / 2))
+                      : Math.max(start, Math.min(end, parsed));
+                    setGuessedYear(clamped);
+                    setInputYear(String(clamped));
+                    setIsYearEditing(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                />
+              ) : (
+                <span
+                  onClick={() => {
+                    const y = guessedYear ?? Math.round((start + end) / 2);
+                    setInputYear(String(y));
+                    setIsYearEditing(true);
+                  }}
+                  style={{ fontSize: 72, fontWeight: 900, color: "#f59e0b", lineHeight: 1, cursor: "text" }}
+                >
+                  {guessedYear ?? Math.round((start + end) / 2)}
+                </span>
+              )}
             </div>
             <div className="w-full" style={{ paddingTop: 20, paddingBottom: 20 }}>
               <input
@@ -922,6 +981,7 @@ export default function TimelineGame({
                   const y = parseInt(e.target.value, 10);
                   setGuessedYear(y);
                   setInputYear(String(y));
+                  setIsYearEditing(false);
                 }}
                 className="mobile-slider"
               />
@@ -935,6 +995,7 @@ export default function TimelineGame({
                     const next = Math.max(start, Math.min(end, current + delta));
                     setGuessedYear(next);
                     setInputYear(String(next));
+                    setIsYearEditing(false);
                   }}
                   style={{
                     background:   "#1f2937",
