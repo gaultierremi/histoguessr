@@ -179,12 +179,12 @@ export default async function Home() {
                 </span>
               )}
 
-              <button
-                disabled
-                className="mt-1 w-full cursor-not-allowed rounded-xl border border-gray-800 py-2 text-sm text-gray-700"
-              >
-                Modifier mon profil
-              </button>
+              <Link
+  href="/profile"
+  className="mt-1 w-full rounded-xl border border-amber-500/30 bg-amber-500/10 py-2 text-center text-sm font-semibold text-amber-400 transition hover:border-amber-400 hover:bg-amber-500/20"
+>
+  Modifier mon profil
+</Link>
             </div>
           ) : (
             <div className="flex flex-col items-center gap-5 rounded-2xl border border-gray-800 bg-gray-900 p-6 text-center">
