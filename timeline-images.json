@@ -1,105 +1,98 @@
 [
-  { "title": "Royaume de Sumer unifié", "match": "Sumer", "year": -2800, "wiki": "Sumer" },
-  { "title": "Construction ziggourats", "match": "ziggourat", "year": -2100, "wiki": "Ziggurat" },
-  { "title": "Royaume d’Élam", "match": "Élam", "year": -2700, "wiki": "Élam" },
-  { "title": "Dynastie Xia Chine", "match": "Xia", "year": -2100, "wiki": "Dynastie Xia" },
+  { "title": "Fondation de Ninive", "match": "Ninive", "year": -1800, "wiki": "Ninive" },
+  { "title": "Empire néo-assyrien apogée", "match": "Assyrien apogée", "year": -700, "wiki": "Empire néo-assyrien" },
+  { "title": "Chute de Ninive", "match": "Ninive chute", "year": -612, "wiki": "Chute de Ninive" },
 
-  { "title": "Règne de Nabuchodonosor II", "match": "Nabuchodonosor", "year": -600, "wiki": "Nabuchodonosor II" },
-  { "title": "Jardins suspendus Babylone", "match": "jardins Babylone", "year": -600, "wiki": "Jardins suspendus de Babylone" },
+  { "title": "Empire lydien richesse", "match": "Lydie", "year": -650, "wiki": "Lydie" },
+  { "title": "Invention monnaie Lydie", "match": "monnaie Lydie", "year": -650, "wiki": "Monnaie" },
 
-  { "title": "Réformes de Dracon Athènes", "match": "Dracon", "year": -620, "wiki": "Dracon" },
-  { "title": "Tyrannie des Trente", "match": "Trente Athènes", "year": -404, "wiki": "Trente Tyrans" },
+  { "title": "Royaume de Juda chute", "match": "Juda", "year": -586, "wiki": "Royaume de Juda" },
+  { "title": "Exil à Babylone", "match": "exil Babylone", "year": -586, "wiki": "Exil à Babylone" },
 
-  { "title": "Fondation République romaine", "match": "République romaine", "year": -509, "wiki": "République romaine" },
-  { "title": "Loi des Douze Tables", "match": "Douze Tables", "year": -450, "wiki": "Loi des Douze Tables" },
+  { "title": "Bataille de Platées victoire grecque", "match": "Platées", "year": -479, "wiki": "Bataille de Platées" },
+  { "title": "Ligue de Délos", "match": "Délos", "year": -478, "wiki": "Ligue de Délos" },
 
-  { "title": "Bataille de Pharsale", "match": "Pharsale", "year": -48, "wiki": "Bataille de Pharsale" },
-  { "title": "Second triumvirat", "match": "Second triumvirat", "year": -43, "wiki": "Second triumvirat" },
+  { "title": "Bataille de Chéronée", "match": "Chéronée", "year": -338, "wiki": "Bataille de Chéronée" },
+  { "title": "Empire d’Alexandre expansion", "match": "Alexandre expansion", "year": -330, "wiki": "Alexandre le Grand" },
 
-  { "title": "Construction aqueducs romains", "match": "aqueduc", "year": 100, "wiki": "Aqueduc" },
-  { "title": "Apogée empire romain Trajan", "match": "Trajan empire", "year": 117, "wiki": "Trajan" },
+  { "title": "Fondation Pergame", "match": "Pergame", "year": -281, "wiki": "Pergame" },
+  { "title": "Bataille de Cynoscéphales", "match": "Cynoscéphales", "year": -197, "wiki": "Bataille de Cynoscéphales" },
 
-  { "title": "Règne de Marc Aurèle", "match": "Marc Aurèle", "year": 170, "wiki": "Marc Aurèle" },
-  { "title": "Invasions barbares début", "match": "invasions barbares", "year": 300, "wiki": "Invasions barbares" },
+  { "title": "Destruction de Corinthe", "match": "Corinthe", "year": -146, "wiki": "Corinthe" },
+  { "title": "Province romaine Égypte", "match": "Égypte romaine", "year": -30, "wiki": "Égypte romaine" },
 
-  { "title": "Conversion Constantin", "match": "Constantin conversion", "year": 312, "wiki": "Constantin Ier" },
-  { "title": "Fondation Ravenne capitale", "match": "Ravenne", "year": 402, "wiki": "Ravenne" },
+  { "title": "Révolte juive contre Rome", "match": "révolte juive", "year": 66, "wiki": "Grande révolte juive" },
+  { "title": "Destruction du Second Temple", "match": "Temple Jérusalem", "year": 70, "wiki": "Temple de Jérusalem" },
 
-  { "title": "Royaume lombard", "match": "Lombards", "year": 568, "wiki": "Lombards" },
-  { "title": "Expansion arabe Méditerranée", "match": "arabes Méditerranée", "year": 700, "wiki": "Conquêtes musulmanes" },
+  { "title": "Pax Romana apogée", "match": "Pax Romana", "year": 100, "wiki": "Pax Romana" },
+  { "title": "Empire romain crise", "match": "crise romaine", "year": 235, "wiki": "Crise du IIIe siècle" },
 
-  { "title": "Dynastie Tang Chine", "match": "Tang", "year": 618, "wiki": "Dynastie Tang" },
-  { "title": "Apogée empire islamique", "match": "califat apogée", "year": 750, "wiki": "Califat abbasside" },
+  { "title": "Bataille de Strasbourg", "match": "Strasbourg 357", "year": 357, "wiki": "Bataille de Strasbourg" },
+  { "title": "Division empire romain définitive", "match": "division Rome", "year": 395, "wiki": "Empire romain" },
 
-  { "title": "Raid viking Irlande", "match": "vikings Irlande", "year": 795, "wiki": "Vikings" },
-  { "title": "Empire bulgare médiéval", "match": "Bulgare empire", "year": 900, "wiki": "Premier Empire bulgare" },
+  { "title": "Sack de Rome Vandales", "match": "Rome Vandales", "year": 455, "wiki": "Sack de Rome (455)" },
+  { "title": "Royaume burgonde", "match": "Burgondes", "year": 443, "wiki": "Burgondes" },
 
-  { "title": "Bataille de Lechfeld", "match": "Lechfeld", "year": 955, "wiki": "Bataille du Lechfeld" },
-  { "title": "Conversion de la Hongrie", "match": "Hongrie chrétienne", "year": 1000, "wiki": "Étienne Ier de Hongrie" },
+  { "title": "Empire mérovingien", "match": "Mérovingiens", "year": 500, "wiki": "Mérovingiens" },
+  { "title": "Bataille de Vouillé Clovis", "match": "Clovis Vouillé", "year": 507, "wiki": "Bataille de Vouillé" },
 
-  { "title": "Empire seldjoukide", "match": "Seldjoukide", "year": 1037, "wiki": "Empire seldjoukide" },
-  { "title": "Prise de Jérusalem croisés", "match": "Jérusalem 1099", "year": 1099, "wiki": "Prise de Jérusalem" },
+  { "title": "Expansion vikings Europe", "match": "vikings Europe", "year": 800, "wiki": "Vikings" },
+  { "title": "Fondation Dublin", "match": "Dublin", "year": 841, "wiki": "Dublin" },
 
-  { "title": "Ordre des Templiers puissance", "match": "Templiers", "year": 1150, "wiki": "Templiers" },
-  { "title": "Construction Notre-Dame Paris", "match": "Notre-Dame construction", "year": 1163, "wiki": "Notre-Dame de Paris" },
+  { "title": "Empire byzantin résistance arabe", "match": "Byzantin arabe", "year": 717, "wiki": "Siège de Constantinople" },
+  { "title": "Califat abbasside Bagdad", "match": "Bagdad", "year": 762, "wiki": "Bagdad" },
 
-  { "title": "Magna Carta signature", "match": "Magna Carta 1215", "year": 1215, "wiki": "Magna Carta" },
-  { "title": "Bataille de Crécy", "match": "Crécy", "year": 1346, "wiki": "Bataille de Crécy" },
+  { "title": "Bataille de Hastings Guillaume", "match": "Guillaume Hastings", "year": 1066, "wiki": "Guillaume le Conquérant" },
+  { "title": "Royaume normand Sicile", "match": "Normands Sicile", "year": 1130, "wiki": "Royaume de Sicile" },
 
-  { "title": "Bataille de Poitiers guerre 100 ans", "match": "Poitiers 1356", "year": 1356, "wiki": "Bataille de Poitiers (1356)" },
-  { "title": "Bataille d’Azincourt victoire anglaise", "match": "Azincourt 1415", "year": 1415, "wiki": "Bataille d'Azincourt" },
+  { "title": "Construction cathédrale Reims", "match": "Reims cathédrale", "year": 1211, "wiki": "Cathédrale de Reims" },
+  { "title": "Inquisition médiévale Europe", "match": "Inquisition", "year": 1230, "wiki": "Inquisition" },
 
-  { "title": "Empire ottoman siège Vienne", "match": "Vienne siège", "year": 1529, "wiki": "Siège de Vienne" },
-  { "title": "Inquisition espagnole", "match": "Inquisition Espagne", "year": 1478, "wiki": "Inquisition espagnole" },
+  { "title": "Bataille de Bannockburn", "match": "Bannockburn", "year": 1314, "wiki": "Bataille de Bannockburn" },
+  { "title": "Royaume de Bourgogne", "match": "Bourgogne", "year": 1363, "wiki": "Duché de Bourgogne" },
 
-  { "title": "Conquête Pérou par Pizarro", "match": "Pizarro Pérou", "year": 1532, "wiki": "Francisco Pizarro" },
-  { "title": "Révolte des Pays-Bas", "match": "Pays-Bas révolte", "year": 1568, "wiki": "Révolte des Pays-Bas" },
+  { "title": "Bataille de Castillon fin guerre 100 ans", "match": "Castillon", "year": 1453, "wiki": "Bataille de Castillon" },
+  { "title": "Invention presse à imprimer", "match": "presse imprimer", "year": 1450, "wiki": "Imprimerie" },
 
-  { "title": "Guerre civile anglaise", "match": "guerre civile Angleterre", "year": 1642, "wiki": "Guerre civile anglaise" },
-  { "title": "Règne de Pierre le Grand", "match": "Pierre le Grand", "year": 1682, "wiki": "Pierre Ier de Russie" },
+  { "title": "Renaissance Florence", "match": "Florence Renaissance", "year": 1400, "wiki": "Renaissance" },
+  { "title": "Banque Médicis puissance", "match": "Médicis banque", "year": 1450, "wiki": "Famille Médicis" },
 
-  { "title": "Guerre de Succession d’Autriche", "match": "Autriche succession", "year": 1740, "wiki": "Guerre de Succession d'Autriche" },
-  { "title": "Indépendance Mexique", "match": "Mexique indépendance", "year": 1821, "wiki": "Indépendance du Mexique" },
+  { "title": "Guerres de religion France", "match": "religion France", "year": 1562, "wiki": "Guerres de religion" },
+  { "title": "Réforme luthérienne diffusion", "match": "Luther réforme", "year": 1517, "wiki": "Martin Luther" },
 
-  { "title": "Révolution industrielle textile", "match": "textile", "year": 1780, "wiki": "Industrie textile" },
-  { "title": "Télégraphe Morse diffusion", "match": "Morse télégraphe", "year": 1840, "wiki": "Télégraphe" },
+  { "title": "Empire ottoman apogée", "match": "Ottoman apogée", "year": 1600, "wiki": "Empire ottoman" },
+  { "title": "Guerre de Succession Espagne", "match": "Espagne succession", "year": 1701, "wiki": "Guerre de Succession d'Espagne" },
 
-  { "title": "Guerre de Sécession début", "match": "Sécession début", "year": 1861, "wiki": "Guerre de Sécession" },
-  { "title": "Abolition esclavage USA", "match": "abolition USA", "year": 1865, "wiki": "Abolition de l'esclavage" },
+  { "title": "Révolution américaine indépendance", "match": "USA indépendance", "year": 1776, "wiki": "Indépendance des États-Unis" },
+  { "title": "Révolution française début", "match": "France 1789", "year": 1789, "wiki": "Révolution française" },
 
-  { "title": "Empire allemand proclamé", "match": "Empire allemand", "year": 1871, "wiki": "Empire allemand" },
-  { "title": "Invention dynamite Nobel", "match": "dynamite", "year": 1867, "wiki": "Dynamite" },
+  { "title": "Empire napoléonien expansion", "match": "Napoléon expansion", "year": 1805, "wiki": "Napoléon Ier" },
+  { "title": "Congrès de Vienne Europe", "match": "Vienne 1815", "year": 1815, "wiki": "Congrès de Vienne" },
 
-  { "title": "Conférence Berlin Afrique", "match": "Berlin Afrique", "year": 1884, "wiki": "Conférence de Berlin" },
-  { "title": "Guerre russo-japonaise début", "match": "russo-japonaise", "year": 1904, "wiki": "Guerre russo-japonaise" },
+  { "title": "Révolution industrielle Europe", "match": "industrielle Europe", "year": 1800, "wiki": "Révolution industrielle" },
+  { "title": "Colonisation Afrique intensification", "match": "Afrique colonisation", "year": 1880, "wiki": "Colonisation de l'Afrique" },
 
-  { "title": "Révolution russe 1905", "match": "Russie 1905", "year": 1905, "wiki": "Révolution russe de 1905" },
-  { "title": "Traité Versailles signature", "match": "Versailles 1919", "year": 1919, "wiki": "Traité de Versailles" },
+  { "title": "Guerre franco-prussienne", "match": "franco-prussienne", "year": 1870, "wiki": "Guerre franco-prussienne" },
+  { "title": "Commune de Paris insurrection", "match": "Commune Paris", "year": 1871, "wiki": "Commune de Paris" },
 
-  { "title": "Grande Dépression début", "match": "Dépression 1929", "year": 1929, "wiki": "Grande Dépression" },
-  { "title": "New Deal Roosevelt", "match": "New Deal", "year": 1933, "wiki": "New Deal" },
+  { "title": "Révolution russe chute tsar", "match": "tsar chute", "year": 1917, "wiki": "Révolution russe" },
+  { "title": "Traité Versailles conséquences", "match": "Versailles conséquences", "year": 1919, "wiki": "Traité de Versailles" },
 
-  { "title": "Guerre civile espagnole", "match": "Espagne 1936", "year": 1936, "wiki": "Guerre d'Espagne" },
-  { "title": "Bataille d’Angleterre aérienne", "match": "Angleterre bataille", "year": 1940, "wiki": "Bataille d'Angleterre" },
+  { "title": "Grande Dépression mondiale", "match": "Dépression mondiale", "year": 1929, "wiki": "Grande Dépression" },
+  { "title": "Montée nazisme Allemagne", "match": "nazisme", "year": 1933, "wiki": "Nazisme" },
 
-  { "title": "Opération Overlord", "match": "Overlord", "year": 1944, "wiki": "Débarquement de Normandie" },
-  { "title": "Création ONU", "match": "ONU 1945", "year": 1945, "wiki": "Organisation des Nations unies" },
+  { "title": "Seconde Guerre mondiale début", "match": "WW2 début", "year": 1939, "wiki": "Seconde Guerre mondiale" },
+  { "title": "Fin Seconde Guerre mondiale", "match": "WW2 fin", "year": 1945, "wiki": "Seconde Guerre mondiale" },
 
-  { "title": "Plan Marshall Europe", "match": "Marshall", "year": 1947, "wiki": "Plan Marshall" },
-  { "title": "Création OTAN", "match": "OTAN 1949", "year": 1949, "wiki": "OTAN" },
+  { "title": "Début guerre froide", "match": "guerre froide début", "year": 1947, "wiki": "Guerre froide" },
+  { "title": "Course à l’espace USA URSS", "match": "espace guerre froide", "year": 1960, "wiki": "Course à l'espace" },
 
-  { "title": "Guerre froide tensions", "match": "guerre froide", "year": 1950, "wiki": "Guerre froide" },
-  { "title": "Indépendance Inde", "match": "Inde 1947", "year": 1947, "wiki": "Indépendance de l'Inde" },
+  { "title": "Premier homme sur la Lune", "match": "Lune 1969", "year": 1969, "wiki": "Apollo 11" },
+  { "title": "Fin guerre froide URSS", "match": "URSS fin", "year": 1991, "wiki": "URSS" },
 
-  { "title": "Révolution cubaine Castro", "match": "Castro", "year": 1959, "wiki": "Révolution cubaine" },
-  { "title": "Mur Berlin séparation", "match": "Berlin mur", "year": 1961, "wiki": "Mur de Berlin" },
+  { "title": "Union européenne élargissement", "match": "UE élargissement", "year": 2004, "wiki": "Union européenne" },
+  { "title": "Crise financière globale", "match": "crise 2008", "year": 2008, "wiki": "Crise financière de 2008" },
 
-  { "title": "Alunissage Apollo 11", "match": "Apollo 11", "year": 1969, "wiki": "Apollo 11" },
-  { "title": "Fin guerre Vietnam", "match": "Vietnam fin", "year": 1975, "wiki": "Guerre du Vietnam" },
-
-  { "title": "Chute URSS", "match": "URSS 1991", "year": 1991, "wiki": "URSS" },
-  { "title": "Union européenne expansion", "match": "UE expansion", "year": 2004, "wiki": "Union européenne" },
-
-  { "title": "Crise financière 2008 mondiale", "match": "crise 2008", "year": 2008, "wiki": "Crise financière" },
-  { "title": "Pandémie COVID début", "match": "COVID 2020", "year": 2020, "wiki": "COVID-19" }
+  { "title": "Printemps arabe révolution", "match": "printemps arabe", "year": 2011, "wiki": "Printemps arabe" },
+  { "title": "Pandémie COVID mondiale", "match": "COVID", "year": 2020, "wiki": "COVID-19" }
 ]

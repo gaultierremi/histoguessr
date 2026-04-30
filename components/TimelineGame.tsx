@@ -517,14 +517,14 @@ function EventCard({
               {/* Score + emoji */}
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                 <span style={{ fontSize: 40, lineHeight: 1 }}>
-                  {score >= 900 ? "🎯" : score >= 600 ? "⭐" : "📍"}
+                  {score >= 180 ? "🎯" : score >= 100 ? "⭐" : "📍"}
                 </span>
                 <div style={{ lineHeight: 1 }}>
                   <span style={{ fontSize: 52, fontWeight: 900, color: "#fbbf24" }}>
                     {score}
                   </span>
                   <span style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", marginLeft: 5 }}>
-                    / 1000
+                    / 200
                   </span>
                 </div>
               </div>
@@ -583,7 +583,7 @@ function EventCard({
 
 function FinalScreen({ results, difficulty }: { results: PlacementResult[]; difficulty: 1 | 2 | 3 }) {
   const totalScore = results.reduce((s, r) => s + r.score, 0);
-  const maxScore   = results.length * 1000;
+  const maxScore   = results.length * 200;
   const diffLabel  = difficulty === 1 ? "Débutant" : difficulty === 2 ? "Pro" : "Expert";
 
   return (
@@ -614,9 +614,8 @@ function FinalScreen({ results, difficulty }: { results: PlacementResult[]; diff
                 </p>
               </div>
               <span className={`shrink-0 text-xl font-black ${
-                r.score >= 900 ? "text-green-400" :
-                r.score >= 700 ? "text-amber-400" :
-                r.score >= 400 ? "text-orange-400" : "text-red-400"
+                r.score >= 180 ? "text-green-400" :
+                r.score >= 100 ? "text-amber-400" : "text-red-400"
               }`}>
                 {r.score}
               </span>
@@ -664,6 +663,7 @@ export default function TimelineGame({
   const [hoverYear, setHoverYear]     = useState<number | null>(null);
   const [cursorRatio, setCursorRatio] = useState<number | null>(null);
   const [inputYear, setInputYear]     = useState<string>("");
+  const [isMobile, setIsMobile]       = useState(false);
   const zoneRef = useRef<HTMLDivElement>(null);
 
   const total = events.length;
@@ -672,11 +672,15 @@ export default function TimelineGame({
 
   const { start, end, span, marks } = getTimeline(events);
 
+  useEffect(() => {
+    setIsMobile(window.innerWidth < 768);
+  }, []);
+
   // When onComplete is provided, call it instead of rendering FinalScreen
   useEffect(() => {
     if (done && onComplete) {
       const totalScore = results.reduce((s, r) => s + r.score, 0);
-      onComplete(totalScore, results.length * 1000);
+      onComplete(totalScore, results.length * 200);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [done]);
@@ -687,9 +691,7 @@ export default function TimelineGame({
     if (validated || !zoneRef.current) return;
     const rect  = zoneRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const year  = hoverYear !== null
-      ? Math.round(invertDistorted(ratio, hoverYear, start, end, span))
-      : Math.round(start + ratio * span);
+    const year  = Math.round(start + ratio * span);
 
     if (guessedYear !== null) {
       setPinAnim("shake");
@@ -708,9 +710,7 @@ export default function TimelineGame({
     if (validated || !zoneRef.current) return;
     const rect  = zoneRef.current.getBoundingClientRect();
     const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    const year  = hoverYear !== null
-      ? Math.round(invertDistorted(ratio, hoverYear, start, end, span))
-      : Math.round(start + ratio * span);
+    const year  = Math.round(start + ratio * span);
     setCursorRatio(ratio);
     setHoverYear(year);
   }
@@ -861,6 +861,11 @@ export default function TimelineGame({
         .tl-no-spin::-webkit-outer-spin-button,
         .tl-no-spin::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         .tl-no-spin { -moz-appearance: textfield; }
+        .mobile-slider { -webkit-appearance: none; appearance: none; width: 100%; background: transparent; cursor: pointer; }
+        .mobile-slider::-webkit-slider-runnable-track { height: 12px; background: #374151; border-radius: 999px; }
+        .mobile-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 44px; height: 44px; border-radius: 50%; background: #f59e0b; margin-top: -16px; box-shadow: 0 2px 12px rgba(245,158,11,0.55); border: 3px solid #fff; }
+        .mobile-slider::-moz-range-track { height: 12px; background: #374151; border-radius: 999px; }
+        .mobile-slider::-moz-range-thumb { width: 44px; height: 44px; border-radius: 50%; background: #f59e0b; border: 3px solid #fff; box-shadow: 0 2px 12px rgba(245,158,11,0.55); }
       `}</style>
 
       <div className="flex w-full flex-col pb-8">
@@ -899,8 +904,66 @@ export default function TimelineGame({
           />
         </div>
 
-        {/* Timeline zone */}
-        <div className="mt-7 w-full overflow-x-auto">
+        {/* Mobile year picker — replaces timeline on small screens */}
+        {isMobile && !validated && (
+          <div className="mx-auto mt-6 w-full max-w-md px-6 flex flex-col items-center gap-6">
+            <div className="text-center">
+              <span style={{ fontSize: 72, fontWeight: 900, color: "#f59e0b", lineHeight: 1 }}>
+                {guessedYear ?? Math.round((start + end) / 2)}
+              </span>
+            </div>
+            <div className="w-full" style={{ paddingTop: 20, paddingBottom: 20 }}>
+              <input
+                type="range"
+                min={start}
+                max={end}
+                value={guessedYear ?? Math.round((start + end) / 2)}
+                onChange={(e) => {
+                  const y = parseInt(e.target.value, 10);
+                  setGuessedYear(y);
+                  setInputYear(String(y));
+                }}
+                className="mobile-slider"
+              />
+            </div>
+            <div className="flex gap-3">
+              {([-10, -1, 1, 10] as const).map((delta) => (
+                <button
+                  key={delta}
+                  onClick={() => {
+                    const current = guessedYear ?? Math.round((start + end) / 2);
+                    const next = Math.max(start, Math.min(end, current + delta));
+                    setGuessedYear(next);
+                    setInputYear(String(next));
+                  }}
+                  style={{
+                    background:   "#1f2937",
+                    border:       "1px solid #374151",
+                    borderRadius: 12,
+                    padding:      "14px 18px",
+                    color:        "#fff",
+                    fontWeight:   700,
+                    fontSize:     16,
+                    cursor:       "pointer",
+                    minWidth:     60,
+                  }}
+                >
+                  {delta > 0 ? `+${delta}` : delta}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {isMobile && validated && (
+          <div className="mx-auto mt-4 w-full max-w-md px-4 flex justify-center gap-6 text-sm text-gray-500">
+            <span>Ta réponse : <span className="font-bold text-amber-400">{guessedYear}</span></span>
+            <span>Vrai : <span className="font-bold text-green-400">{event.year}</span></span>
+          </div>
+        )}
+
+        {/* Timeline zone — desktop only */}
+        {!isMobile && <div className="mt-7 w-full overflow-x-auto">
           <div className="min-w-[580px] px-8">
 
             {/* Instruction / live year */}
@@ -1135,10 +1198,10 @@ export default function TimelineGame({
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
-        {/* Direct year input */}
-        {!validated && (
+        {/* Direct year input — desktop only */}
+        {!isMobile && !validated && (
           <div className="mx-auto mt-4 w-full max-w-5xl px-4 flex justify-center">
             <input
               type="number"

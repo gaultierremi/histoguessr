@@ -2,7 +2,8 @@ import { supabase } from "@/lib/supabase";
 import type { TimelineEvent } from "@/lib/types";
 
 export function calculateScore(guessedYear: number, realYear: number): number {
-  return Math.max(0, 1000 - Math.abs(guessedYear - realYear));
+  const diff = Math.abs(guessedYear - realYear);
+  return Math.max(0, 200 - diff);
 }
 
 export async function getTimelineEvents(
