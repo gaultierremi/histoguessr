@@ -1,5 +1,7 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
+export type MultiplayerGameMode = "quiz" | "timeline";
+
 function generateCode() {
   return Math.floor(1000 + Math.random() * 9000).toString();
 }
@@ -8,7 +10,8 @@ export async function createRoom(
   supabase: SupabaseClient,
   userId: string,
   userName: string,
-  difficulty: number
+  difficulty: number,
+  gameMode: MultiplayerGameMode = "quiz"
 ) {
   const code = generateCode();
 
@@ -19,6 +22,7 @@ export async function createRoom(
       host_id: userId,
       host_name: userName,
       difficulty,
+      game_mode: gameMode,
     })
     .select()
     .single();
@@ -77,6 +81,7 @@ export async function startRoom(
     .update({
       status: "playing",
       question_ids: questionIds,
+      current_question_index: 0,
       started_at: new Date().toISOString(),
     })
     .eq("id", roomId);
