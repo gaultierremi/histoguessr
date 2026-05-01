@@ -221,26 +221,21 @@ export default function QuizCard({
   const sessionDone = answers.length === total;
 
   useEffect(() => {
-    async function checkValidator() {
-      const supabase = createClient();
+  async function checkValidator() {
+    const supabase = createClient();
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const { data, error } = await supabase.rpc("is_current_user_validator");
 
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("validators")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      setIsValidator(!!data);
+    if (error) {
+      setIsValidator(false);
+      return;
     }
 
-    checkValidator();
-  }, []);
+    setIsValidator(data === true);
+  }
+
+  checkValidator();
+}, []);
 
   async function sendQuizToRevision(questionId: string) {
     const supabase = createClient();

@@ -826,6 +826,7 @@ export default function TimelineGame({
   const [isMobile, setIsMobile] = useState(false);
   const [isYearEditing, setIsYearEditing] = useState(false);
   const [isValidator, setIsValidator] = useState(false);
+  
 
   const zoneRef = useRef<HTMLDivElement>(null);
   const yearInputRef = useRef<HTMLInputElement>(null);
@@ -841,26 +842,21 @@ export default function TimelineGame({
   }, []);
 
   useEffect(() => {
-    async function checkValidator() {
-      const supabase = createClient();
+  async function checkValidator() {
+    const supabase = createClient();
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+    const { data, error } = await supabase.rpc("is_current_user_validator");
 
-      if (!user) return;
-
-      const { data } = await supabase
-        .from("validators")
-        .select("user_id")
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      setIsValidator(!!data);
+    if (error) {
+      setIsValidator(false);
+      return;
     }
 
-    checkValidator();
-  }, []);
+    setIsValidator(data === true);
+  }
+
+  checkValidator();
+}, []);
 
   useEffect(() => {
     if (isYearEditing && yearInputRef.current) {
@@ -1188,22 +1184,23 @@ export default function TimelineGame({
         </div>
 
         <div className="mx-auto mt-5 w-full max-w-5xl px-4">
-          <EventCard
-            event={event}
-            flipped={validated}
-            score={currentScore}
-            yearDiff={yearDiff}
-            exiting={exiting}
-            entering={entering}
-            onNext={handleNext}
-            isLastCard={step === total - 1}
-            isValidator={isValidator}
-            sendToRevision={sendToRevision}
-            deleteEvent={deleteEvent}
-          />
-        </div>
-        {isValidator && validated && (
-  <div className="mx-auto mt-3 flex w-full max-w-5xl gap-2 px-4 md:hidden">
+  <EventCard
+    event={event}
+    flipped={validated}
+    score={currentScore}
+    yearDiff={yearDiff}
+    exiting={exiting}
+    entering={entering}
+    onNext={handleNext}
+    isLastCard={step === total - 1}
+    isValidator={isValidator}
+    sendToRevision={sendToRevision}
+    deleteEvent={deleteEvent}
+  />
+</div>
+
+{isValidator && (
+  <div className="mx-auto mt-3 flex w-full max-w-5xl gap-2 px-4">
     <button
       type="button"
       onClick={() => sendToRevision(event.id)}
@@ -1221,6 +1218,8 @@ export default function TimelineGame({
     </button>
   </div>
 )}
+
+
 
         {isMobile && !validated && (
           <div className="mx-auto mt-6 flex w-full max-w-md flex-col items-center gap-6 px-6">
