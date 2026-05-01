@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { QuizQuestion, QuizDifficulty } from "@/lib/types";
 import { createClient } from "@/lib/supabase-browser";
 import { saveQuizScore } from "@/lib/scores";
@@ -93,9 +93,7 @@ function ModeSelector({ onSelect }: { onSelect: (mode: McqMode) => void }) {
             onClick={() => onSelect(mode.id)}
             className="flex flex-col items-center gap-1 rounded-xl border border-gray-700 bg-gray-900 px-3 py-4 transition-all hover:border-amber-500/50 hover:bg-gray-800 active:scale-95"
           >
-            <span className="text-base font-bold text-white">
-              {mode.label}
-            </span>
+            <span className="text-base font-bold text-white">{mode.label}</span>
             <span className="text-sm font-semibold text-amber-400">
               +{mode.pts}
             </span>
@@ -210,17 +208,77 @@ export default function QuizCard({
 }) {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
-
   const [mode, setMode] = useState<McqMode | null>(null);
   const [answered, setAnswered] = useState(false);
   const [isCorrect, setIsCorrect] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [cashInput, setCashInput] = useState("");
   const [duoIndices, setDuoIndices] = useState<[number, number] | null>(null);
+  const [isValidator, setIsValidator] = useState(false);
 
   const total = questions.length;
   const question = questions[step];
   const sessionDone = answers.length === total;
+
+  useEffect(() => {
+    async function checkValidator() {
+      const supabase = createClient();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) return;
+
+      const { data } = await supabase
+        .from("validators")
+        .select("user_id")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      setIsValidator(!!data);
+    }
+
+    checkValidator();
+  }, []);
+
+  async function sendQuizToRevision(questionId: string) {
+    const supabase = createClient();
+
+    const { error } = await supabase.rpc("send_quiz_question_to_revision", {
+      question_id: questionId,
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Impossible d’envoyer cette question en révision.");
+      return;
+    }
+
+    alert("Question envoyée en révision.");
+  }
+
+  async function deleteQuizQuestion(questionId: string) {
+    const confirmDelete = confirm(
+      "Supprimer définitivement cette question de la base de données ?"
+    );
+
+    if (!confirmDelete) return;
+
+    const supabase = createClient();
+
+    const { error } = await supabase.rpc("delete_quiz_question", {
+      question_id: questionId,
+    });
+
+    if (error) {
+      console.error(error);
+      alert("Impossible de supprimer cette question.");
+      return;
+    }
+
+    alert("Question supprimée.");
+  }
 
   if (!question) {
     return (
@@ -290,8 +348,8 @@ export default function QuizCard({
       mode === "cash"
         ? cashInput
         : selectedIndex !== null
-        ? question.options[selectedIndex]
-        : "";
+          ? question.options[selectedIndex]
+          : "";
 
     const newRecord: AnswerRecord = {
       question,
@@ -361,10 +419,10 @@ export default function QuizCard({
   const displayIndices: number[] = isTrueFalse
     ? [0, 1]
     : mode === "duo"
-    ? duoIndices ?? []
-    : mode === "carre"
-    ? question.options.map((_, index) => index)
-    : [];
+      ? duoIndices ?? []
+      : mode === "carre"
+        ? question.options.map((_, index) => index)
+        : [];
 
   const isTwoCol = isTrueFalse || mode === "duo";
 
@@ -503,7 +561,7 @@ export default function QuizCard({
                 : "border-red-900 bg-red-950/40"
             }`}
           >
-            <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p
                   className={`text-base font-bold ${
@@ -531,13 +589,35 @@ export default function QuizCard({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={handleNext}
-                className="shrink-0 rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-amber-400"
-              >
-                {step < total - 1 ? "Suivante →" : "Résultats →"}
-              </button>
+              <div className="flex shrink-0 flex-col gap-2 sm:min-w-[160px]">
+                {isValidator && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => sendQuizToRevision(question.id)}
+                      className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-300 transition hover:bg-amber-500/20"
+                    >
+                      ⚠️ Révision
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteQuizQuestion(question.id)}
+                      className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs font-bold text-red-300 transition hover:bg-red-500/20"
+                    >
+                      🗑 Supprimer
+                    </button>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  className="rounded-lg bg-amber-500 px-5 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-amber-400"
+                >
+                  {step < total - 1 ? "Suivante →" : "Résultats →"}
+                </button>
+              </div>
             </div>
 
             {question.explanation && (
