@@ -1202,6 +1202,25 @@ export default function TimelineGame({
             deleteEvent={deleteEvent}
           />
         </div>
+        {isValidator && validated && (
+  <div className="mx-auto mt-3 flex w-full max-w-5xl gap-2 px-4 md:hidden">
+    <button
+      type="button"
+      onClick={() => sendToRevision(event.id)}
+      className="flex-1 rounded-xl border border-amber-500/40 bg-amber-500/10 py-3 text-sm font-black text-amber-300"
+    >
+      ⚠️ Révision
+    </button>
+
+    <button
+      type="button"
+      onClick={() => deleteEvent(event.id)}
+      className="flex-1 rounded-xl border border-red-500/40 bg-red-500/10 py-3 text-sm font-black text-red-300"
+    >
+      🗑 Supprimer
+    </button>
+  </div>
+)}
 
         {isMobile && !validated && (
           <div className="mx-auto mt-6 flex w-full max-w-md flex-col items-center gap-6 px-6">
