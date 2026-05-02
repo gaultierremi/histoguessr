@@ -693,6 +693,43 @@ export default function PlaySessionPage({
                   Nettoyer joueurs
                 </button>
               </div>
+              <div className="border-t border-gray-800 p-6">
+  <div className="mb-4 flex items-center justify-between">
+    <h3 className="text-xl font-black text-white">Élèves connectés</h3>
+
+    <span className="rounded-full bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300">
+      {players.length}
+    </span>
+  </div>
+
+  {players.length === 0 ? (
+    <div className="rounded-2xl border border-dashed border-gray-800 bg-gray-900/50 p-6 text-center text-gray-500">
+      Aucun élève pour le moment.
+    </div>
+  ) : (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {players.map((player, index) => (
+        <div
+          key={player.id}
+          className={`flex items-center justify-between rounded-2xl border p-4 ${
+            player.id === playerId
+              ? "border-amber-500/50 bg-amber-500/10"
+              : "border-gray-800 bg-gray-900"
+          }`}
+        >
+          <div>
+            <p className="font-black text-white">
+              #{index + 1} {player.nickname}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">Prêt à jouer</p>
+          </div>
+
+          <span className="text-2xl">✅</span>
+        </div>
+      ))}
+    </div>
+  )}
+</div>
             </div>
           )}
 
