@@ -255,30 +255,33 @@ export default function PlaySessionPage({
   }
 
   async function nextQuestion() {
-    if (!session) return;
+  if (!session) return;
 
-    const nextIndex = session.current_question_index + 1;
+  const nextIndex = session.current_question_index + 1;
 
-    if (nextIndex >= session.question_ids.length) {
-      await finishSession();
-      return;
-    }
-
-    const { error } = await supabase
-      .from("school_game_sessions")
-      .update({
-        current_question_index: nextIndex,
-        question_started_at: new Date().toISOString(),
-      })
-      .eq("id", session.id);
-
-    if (error) {
-      alert("Impossible de passer à la question suivante.");
-      return;
-    }
-
-    await loadSession();
+  if (nextIndex >= session.question_ids.length) {
+    await finishSession();
+    return;
   }
+
+  const { error } = await supabase.rpc("next_school_session_question", {
+    target_session_id: session.id,
+  });
+
+  if (error) {
+    alert("Impossible de passer à la question suivante.");
+    return;
+  }
+
+  setQuestion(null);
+  setMyAnswer(null);
+  setAnswers([]);
+  setMode(null);
+  setDuoIndices(null);
+  setCashInput("");
+
+  await loadSession();
+}
 
   async function resetSession() {
     if (!session) return;
@@ -436,29 +439,33 @@ export default function PlaySessionPage({
   }, [params.sessionId]);
 
   useEffect(() => {
-    const interval = setInterval(async () => {
-      const { data } = await supabase
-        .from("school_game_sessions")
-        .select("status, current_question_index, question_started_at")
-        .eq("id", params.sessionId)
-        .maybeSingle();
+  const interval = setInterval(async () => {
+    const { data } = await supabase
+      .from("school_game_sessions")
+      .select("status, current_question_index, question_started_at, question_ids")
+      .eq("id", params.sessionId)
+      .maybeSingle();
 
-      if (!data) return;
+    if (!data) return;
 
-      setSession((current) => {
-        if (!current) return current;
+    setSession((current) => {
+      if (!current) return current;
 
-        return {
-          ...current,
-          status: data.status as Session["status"],
-          current_question_index: data.current_question_index,
-          question_started_at: data.question_started_at,
-        };
-      });
-    }, 1000);
+      return {
+        ...current,
+        status: data.status as Session["status"],
+        current_question_index: data.current_question_index,
+        question_started_at: data.question_started_at,
+        question_ids: data.question_ids ?? [],
+      };
+    });
 
-    return () => clearInterval(interval);
-  }, [params.sessionId, supabase]);
+    await loadPlayers();
+    await loadAnswers();
+  }, 1000);
+
+  return () => clearInterval(interval);
+}, [params.sessionId, supabase, session?.id, session?.current_question_index, playerId]);
 
   useEffect(() => {
     if (!session || session.status !== "playing") return;
