@@ -104,19 +104,20 @@ export default function PlaySessionPage({
   const showReveal = session?.status === "playing" && isTimeOver;
 
   async function loadPlayers() {
-    const { data, error } = await supabase
-      .from("session_players")
-      .select("id, nickname, score")
-      .eq("session_id", params.sessionId)
-      .order("score", { ascending: false });
+  const { data, error } = await supabase
+    .from("session_players")
+    .select("id, nickname, score")
+    .eq("session_id", params.sessionId)
+    .order("joined_at", { ascending: true });
 
-    if (error) {
-      setMessage("Impossible de charger les joueurs.");
-      return;
-    }
-
-    setPlayers((data ?? []) as Player[]);
+  if (error) {
+    console.error("loadPlayers error", error);
+    setMessage("Impossible de charger les joueurs.");
+    return;
   }
+
+  setPlayers((data ?? []) as Player[]);
+}
 
   async function loadAnswers() {
     if (!session) return;
