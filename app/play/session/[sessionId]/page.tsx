@@ -11,6 +11,8 @@ import {
 
 const DEFAULT_QUESTION_DURATION = 15;
 
+type Phase = "question" | "reveal" | "leaderboard";
+
 type Session = {
   id: string;
   code: string;
@@ -76,14 +78,11 @@ export default function PlaySessionPage({
   const [cashInput, setCashInput] = useState("");
 
   const [timeLeft, setTimeLeft] = useState(DEFAULT_QUESTION_DURATION);
+  const [phase, setPhase] = useState<Phase>("question");
+  const [phaseLockedIndex, setPhaseLockedIndex] = useState<number | null>(null);
+
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
-  const [autoAdvanceLockedIndex, setAutoAdvanceLockedIndex] = useState<
-    number | null
-  >(null);
-
-  const currentQuestionId =
-    session?.question_ids?.[session.current_question_index] ?? null;
 
   const questionDuration =
     session?.question_duration ?? DEFAULT_QUESTION_DURATION;
@@ -109,7 +108,10 @@ export default function PlaySessionPage({
   const answerCount = answers.length;
   const correctCount = answers.filter((answer) => answer.is_correct).length;
   const isTimeOver = timeLeft <= 0;
-  const showReveal = session?.status === "playing" && isTimeOver;
+
+  const showReveal = phase === "reveal";
+  const showLeaderboard = phase === "leaderboard";
+  const canAnswer = phase === "question" && !isTimeOver;
 
   async function loadPlayers() {
     const { data, error } = await supabase
@@ -129,15 +131,13 @@ export default function PlaySessionPage({
   async function loadAnswers() {
     if (!session) return;
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("session_answers")
       .select(
         "id, session_id, player_id, question_id, question_index, mode, answer_index, cash_answer, is_correct, points"
       )
       .eq("session_id", session.id)
       .eq("question_index", session.current_question_index);
-
-    if (error) return;
 
     const typedAnswers = (data ?? []) as SessionAnswer[];
     setAnswers(typedAnswers);
@@ -154,12 +154,7 @@ export default function PlaySessionPage({
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (!user) {
-      setIsTeacher(false);
-      return;
-    }
-
-    setIsTeacher(sessionData.teacher_id === user.id);
+    setIsTeacher(!!user && sessionData.teacher_id === user.id);
   }
 
   async function loadSession() {
@@ -181,13 +176,7 @@ export default function PlaySessionPage({
       .eq("id", params.sessionId)
       .maybeSingle();
 
-    if (sessionError) {
-      setMessage("Impossible de charger la session.");
-      setLoading(false);
-      return;
-    }
-
-    if (!sessionData) {
+    if (sessionError || !sessionData) {
       setMessage("Session introuvable.");
       setLoading(false);
       return;
@@ -238,20 +227,19 @@ export default function PlaySessionPage({
   }) {
     if (!session || !isTeacher) return;
 
-    const patch: Partial<Session> = {};
+    const newQuestionDuration =
+      typeof questionDuration === "number"
+        ? questionDuration
+        : session.question_duration;
 
-    if (typeof questionDuration === "number") {
-      patch.question_duration = questionDuration;
-    }
+    const newAutoAdvance =
+      typeof autoAdvance === "boolean" ? autoAdvance : session.auto_advance;
 
-    if (typeof autoAdvance === "boolean") {
-      patch.auto_advance = autoAdvance;
-    }
-
-    const { error } = await supabase
-      .from("school_game_sessions")
-      .update(patch)
-      .eq("id", session.id);
+    const { error } = await supabase.rpc("update_school_session_settings", {
+      target_session_id: session.id,
+      new_question_duration: newQuestionDuration,
+      new_auto_advance: newAutoAdvance,
+    });
 
     if (error) {
       alert("Impossible de modifier les réglages.");
@@ -260,7 +248,8 @@ export default function PlaySessionPage({
 
     setSession({
       ...session,
-      ...patch,
+      question_duration: newQuestionDuration,
+      auto_advance: newAutoAdvance,
     });
   }
 
@@ -276,6 +265,8 @@ export default function PlaySessionPage({
       return;
     }
 
+    setPhase("question");
+    setPhaseLockedIndex(null);
     await loadSession();
   }
 
@@ -322,7 +313,8 @@ export default function PlaySessionPage({
     setMode(null);
     setDuoIndices(null);
     setCashInput("");
-    setAutoAdvanceLockedIndex(null);
+    setPhase("question");
+    setPhaseLockedIndex(null);
 
     await loadSession();
   }
@@ -346,6 +338,8 @@ export default function PlaySessionPage({
       return;
     }
 
+    setPhase("question");
+    setPhaseLockedIndex(null);
     await loadSession();
   }
 
@@ -394,7 +388,7 @@ export default function PlaySessionPage({
   }
 
   function handleSelectMode(selectedMode: McqMode) {
-    if (!question || myAnswer || isTimeOver) return;
+    if (!question || myAnswer || !canAnswer) return;
 
     setMode(selectedMode);
 
@@ -421,7 +415,7 @@ export default function PlaySessionPage({
     answerIndex?: number;
     cashAnswer?: string;
   }) {
-    if (!session || !question || !playerId || myAnswer || isTimeOver) return;
+    if (!session || !question || !playerId || myAnswer || !canAnswer) return;
 
     const correctAnswer = question.options[question.answer_index];
 
@@ -530,7 +524,8 @@ export default function PlaySessionPage({
     if (!questionId) return;
 
     loadCurrentQuestion(questionId);
-    setAutoAdvanceLockedIndex(null);
+    setPhase("question");
+    setPhaseLockedIndex(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.current_question_index, session?.status, supabase]);
 
@@ -561,26 +556,26 @@ export default function PlaySessionPage({
   }, [session?.question_started_at, session?.status, questionDuration]);
 
   useEffect(() => {
-    if (!session) return;
-    if (!isTeacher) return;
-    if (!session.auto_advance) return;
-    if (!showReveal) return;
-    if (autoAdvanceLockedIndex === session.current_question_index) return;
+    if (!session || session.status !== "playing") return;
+    if (timeLeft > 0) return;
+    if (phaseLockedIndex === session.current_question_index) return;
 
-    setAutoAdvanceLockedIndex(session.current_question_index);
+    setPhaseLockedIndex(session.current_question_index);
+    setPhase("reveal");
 
-    const timeout = setTimeout(() => {
-      nextQuestion();
-    }, 2500);
+    const revealTimeout = setTimeout(() => {
+      setPhase("leaderboard");
 
-    return () => clearTimeout(timeout);
+      if (isTeacher && session.auto_advance) {
+        setTimeout(() => {
+          nextQuestion();
+        }, 2500);
+      }
+    }, 2000);
+
+    return () => clearTimeout(revealTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    showReveal,
-    isTeacher,
-    session?.auto_advance,
-    session?.current_question_index,
-  ]);
+  }, [timeLeft, session?.current_question_index, session?.status]);
 
   useEffect(() => {
     const channel = supabase
@@ -633,35 +628,18 @@ export default function PlaySessionPage({
   if (loading) {
     return (
       <main className="min-h-screen bg-gray-950 p-8 text-white">
-        <div className="mx-auto max-w-xl rounded-3xl border border-gray-800 bg-gray-900 p-6">
-          Chargement de la session...
-        </div>
+        Chargement de la session...
       </main>
     );
   }
 
-  if (message) {
+  if (message || !session) {
     return (
       <main className="min-h-screen bg-gray-950 p-8 text-white">
         <div className="mx-auto max-w-xl rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
-          <p className="font-bold text-red-300">{message}</p>
-
-          <a
-            href="/join"
-            className="mt-5 inline-block rounded-xl bg-amber-500 px-5 py-3 font-black text-gray-950"
-          >
-            Retour rejoindre
-          </a>
-        </div>
-      </main>
-    );
-  }
-
-  if (!session) {
-    return (
-      <main className="min-h-screen bg-gray-950 p-8 text-white">
-        <div className="mx-auto max-w-xl rounded-3xl border border-gray-800 bg-gray-900 p-6">
-          Session introuvable.
+          <p className="font-bold text-red-300">
+            {message ?? "Session introuvable."}
+          </p>
         </div>
       </main>
     );
@@ -678,7 +656,6 @@ export default function PlaySessionPage({
           <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h1 className="text-4xl font-black">{session.title}</h1>
-
               <p className="mt-2 text-gray-400">
                 Code :{" "}
                 <span className="font-mono font-black text-amber-400">
@@ -753,8 +730,8 @@ export default function PlaySessionPage({
                       }
                       className={`mt-2 w-full rounded-xl px-4 py-3 font-black transition ${
                         session.auto_advance
-                          ? "bg-green-500 text-gray-950 hover:bg-green-400"
-                          : "border border-gray-700 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                          ? "bg-green-500 text-gray-950"
+                          : "border border-gray-700 bg-gray-950 text-gray-300"
                       }`}
                     >
                       {session.auto_advance ? "Activé" : "Désactivé"}
@@ -799,7 +776,7 @@ export default function PlaySessionPage({
                 <button
                   type="button"
                   onClick={resetSession}
-                  className="rounded-2xl border border-gray-700 bg-gray-800 px-5 py-3 font-black text-gray-200 transition hover:bg-gray-700"
+                  className="rounded-2xl border border-gray-700 bg-gray-800 px-5 py-3 font-black text-gray-200"
                 >
                   Reset session
                 </button>
@@ -807,7 +784,7 @@ export default function PlaySessionPage({
                 <button
                   type="button"
                   onClick={addFakePlayers}
-                  className="rounded-2xl bg-blue-500 px-5 py-3 font-black text-gray-950 transition hover:bg-blue-400"
+                  className="rounded-2xl bg-blue-500 px-5 py-3 font-black text-gray-950"
                 >
                   +5 bots
                 </button>
@@ -815,7 +792,7 @@ export default function PlaySessionPage({
                 <button
                   type="button"
                   onClick={clearPlayers}
-                  className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 font-black text-red-300 transition hover:bg-red-500/20"
+                  className="rounded-2xl border border-red-500/40 bg-red-500/10 px-5 py-3 font-black text-red-300"
                 >
                   Nettoyer joueurs
                 </button>
@@ -826,19 +803,17 @@ export default function PlaySessionPage({
           {session.status === "waiting" && (
             <div className="mt-8 overflow-hidden rounded-3xl border border-amber-500/20 bg-gray-950">
               <div className="relative bg-gradient-to-br from-amber-500/20 via-gray-950 to-gray-950 p-8 text-center">
-                <div className="absolute left-1/2 top-0 h-40 w-80 -translate-x-1/2 rounded-full bg-amber-400/20 blur-3xl" />
-
-                <p className="relative text-sm font-black uppercase tracking-[0.3em] text-amber-400">
+                <p className="text-sm font-black uppercase tracking-[0.3em] text-amber-400">
                   Lobby de classe
                 </p>
 
-                <h2 className="relative mt-3 text-3xl font-black text-white">
+                <h2 className="mt-3 text-3xl font-black text-white">
                   {isTeacher
                     ? "Invite tes élèves à rejoindre la partie"
                     : "En attente du professeur"}
                 </h2>
 
-                <div className="relative mx-auto mt-6 max-w-md rounded-3xl border border-amber-500/30 bg-gray-950/80 p-6">
+                <div className="mx-auto mt-6 max-w-md rounded-3xl border border-amber-500/30 bg-gray-950/80 p-6">
                   <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
                     Code de session
                   </p>
@@ -849,8 +824,7 @@ export default function PlaySessionPage({
 
                   <p className="mt-3 text-sm text-gray-500">
                     Les élèves vont sur{" "}
-                    <span className="font-bold text-white">/join</span> et
-                    entrent ce code.
+                    <span className="font-bold text-white">/join</span>.
                   </p>
 
                   <p className="mt-3 text-xs text-gray-500">
@@ -866,7 +840,7 @@ export default function PlaySessionPage({
                     type="button"
                     onClick={startSession}
                     disabled={players.length === 0}
-                    className="relative mt-6 rounded-2xl bg-green-500 px-8 py-4 text-lg font-black text-gray-950 transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
+                    className="mt-6 rounded-2xl bg-green-500 px-8 py-4 text-lg font-black text-gray-950 transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     🚀 Lancer la partie
                   </button>
@@ -960,6 +934,31 @@ export default function PlaySessionPage({
                     </div>
                   )}
 
+                  {showLeaderboard && (
+                    <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-6 text-center">
+                      <h2 className="text-2xl font-black text-white">
+                        Classement
+                      </h2>
+
+                      <div className="mt-6 space-y-3">
+                        {players.slice(0, 5).map((player, index) => (
+                          <div
+                            key={player.id}
+                            className="flex items-center justify-between rounded-xl bg-gray-900 px-4 py-3"
+                          >
+                            <span className="font-black text-amber-400">
+                              #{index + 1} {player.nickname}
+                            </span>
+
+                            <span className="font-black text-green-400">
+                              {player.score} pts
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {isTeacher ? (
                     <>
                       <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5">
@@ -975,7 +974,7 @@ export default function PlaySessionPage({
 
                       <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5">
                         <h3 className="text-lg font-black text-white">
-                          Classement
+                          Classement live
                         </h3>
 
                         <div className="mt-4 space-y-2">
@@ -984,14 +983,9 @@ export default function PlaySessionPage({
                               key={player.id}
                               className="flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-4 py-3"
                             >
-                              <div className="flex items-center gap-3">
-                                <span className="text-xl font-black text-amber-400">
-                                  #{index + 1}
-                                </span>
-                                <span className="font-bold text-white">
-                                  {player.nickname}
-                                </span>
-                              </div>
+                              <span className="font-bold text-white">
+                                #{index + 1} {player.nickname}
+                              </span>
 
                               <span className="font-black text-green-400">
                                 {player.score} pts
@@ -1022,7 +1016,7 @@ export default function PlaySessionPage({
                         </span>
                       </p>
                     </div>
-                  ) : showReveal ? (
+                  ) : showReveal || showLeaderboard ? (
                     <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5 text-center">
                       <p className="text-lg font-black text-white">
                         Manche terminée
@@ -1045,7 +1039,7 @@ export default function PlaySessionPage({
                                 <button
                                   key={choice}
                                   type="button"
-                                  disabled={isTimeOver}
+                                  disabled={!canAnswer}
                                   onClick={() => handleSelectMode(choice)}
                                   className="flex flex-col items-center gap-1 rounded-xl border border-gray-700 bg-gray-950 px-3 py-4 transition hover:border-amber-500/50 hover:bg-gray-900 disabled:cursor-not-allowed"
                                 >
@@ -1068,7 +1062,7 @@ export default function PlaySessionPage({
                             <input
                               type="text"
                               value={cashInput}
-                              disabled={isTimeOver}
+                              disabled={!canAnswer}
                               onChange={(event) =>
                                 setCashInput(event.target.value)
                               }
@@ -1076,7 +1070,7 @@ export default function PlaySessionPage({
                                 if (
                                   event.key === "Enter" &&
                                   cashInput.trim() &&
-                                  !isTimeOver
+                                  canAnswer
                                 ) {
                                   submitAnswer({ cashAnswer: cashInput });
                                 }
@@ -1091,7 +1085,7 @@ export default function PlaySessionPage({
                               onClick={() =>
                                 submitAnswer({ cashAnswer: cashInput })
                               }
-                              disabled={!cashInput.trim() || isTimeOver}
+                              disabled={!cashInput.trim() || !canAnswer}
                               className="rounded-xl bg-amber-500 px-5 py-3 font-black text-gray-950 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               Valider
@@ -1109,7 +1103,7 @@ export default function PlaySessionPage({
                               <button
                                 key={index}
                                 type="button"
-                                disabled={isTimeOver}
+                                disabled={!canAnswer}
                                 onClick={() =>
                                   submitAnswer({ answerIndex: index })
                                 }
