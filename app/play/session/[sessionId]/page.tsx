@@ -101,6 +101,7 @@ export default function PlaySessionPage({
   const answerCount = answers.length;
   const correctCount = answers.filter((answer) => answer.is_correct).length;
   const isTimeOver = timeLeft <= 0;
+  const showReveal = session?.status === "playing" && isTimeOver;
 
   async function loadPlayers() {
     const { data, error } = await supabase
@@ -757,9 +758,21 @@ export default function PlaySessionPage({
                     {question.question}
                   </h2>
 
-                  {isTimeOver && !myAnswer && !isTeacher && (
-                    <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-300">
-                      Temps écoulé. Tu ne peux plus répondre.
+                  {showReveal && (
+                    <div className="mt-5 rounded-2xl border border-green-500/30 bg-green-500/10 p-5">
+                      <p className="text-sm font-black uppercase tracking-widest text-green-300">
+                        Bonne réponse
+                      </p>
+
+                      <p className="mt-2 text-2xl font-black text-white">
+                        {question.options[question.answer_index]}
+                      </p>
+
+                      {question.explanation && (
+                        <p className="mt-3 text-sm leading-relaxed text-gray-300">
+                          {question.explanation}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -825,12 +838,17 @@ export default function PlaySessionPage({
                         </span>
                       </p>
                     </div>
+                  ) : showReveal ? (
+                    <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5 text-center">
+                      <p className="text-lg font-black text-white">
+                        Manche terminée
+                      </p>
+                      <p className="mt-2 text-sm text-gray-400">
+                        En attente de la question suivante…
+                      </p>
+                    </div>
                   ) : (
-                    <div
-                      className={`mt-6 ${
-                        isTimeOver ? "pointer-events-none opacity-40" : ""
-                      }`}
-                    >
+                    <div className="mt-6">
                       {!isTrueFalse && mode === null && (
                         <div>
                           <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-500">
