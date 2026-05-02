@@ -9,6 +9,8 @@ import {
   type McqMode,
 } from "@/components/QuizCard";
 
+const QUESTION_DURATION = 15;
+
 type Session = {
   id: string;
   code: string;
@@ -17,6 +19,7 @@ type Session = {
   status: "waiting" | "playing" | "finished";
   current_question_index: number;
   question_ids: string[];
+  question_started_at: string | null;
 };
 
 type Player = {
@@ -70,6 +73,7 @@ export default function PlaySessionPage({
   const [duoIndices, setDuoIndices] = useState<[number, number] | null>(null);
   const [cashInput, setCashInput] = useState("");
 
+  const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -86,14 +90,17 @@ export default function PlaySessionPage({
   const displayIndices: number[] = !question
     ? []
     : isTrueFalse
-      ? [0, 1]
-      : mode === "duo"
-        ? duoIndices ?? []
-        : mode === "carre"
-          ? question.options.map((_, index) => index)
-          : [];
+    ? [0, 1]
+    : mode === "duo"
+    ? duoIndices ?? []
+    : mode === "carre"
+    ? question.options.map((_, index) => index)
+    : [];
 
   const isTwoCol = isTrueFalse || mode === "duo";
+  const answerCount = answers.length;
+  const correctCount = answers.filter((answer) => answer.is_correct).length;
+  const isTimeOver = timeLeft <= 0;
 
   async function loadPlayers() {
     const { data, error } = await supabase
@@ -160,7 +167,7 @@ export default function PlaySessionPage({
     const { data: sessionData, error: sessionError } = await supabase
       .from("school_game_sessions")
       .select(
-        "id, code, title, teacher_id, status, current_question_index, question_ids"
+        "id, code, title, teacher_id, status, current_question_index, question_ids, question_started_at"
       )
       .eq("id", params.sessionId)
       .maybeSingle();
@@ -258,7 +265,10 @@ export default function PlaySessionPage({
 
     const { error } = await supabase
       .from("school_game_sessions")
-      .update({ current_question_index: nextIndex })
+      .update({
+        current_question_index: nextIndex,
+        question_started_at: new Date().toISOString(),
+      })
       .eq("id", session.id);
 
     if (error) {
@@ -277,6 +287,7 @@ export default function PlaySessionPage({
       .update({
         status: "waiting",
         current_question_index: 0,
+        question_started_at: null,
         started_at: null,
         finished_at: null,
       })
@@ -335,7 +346,7 @@ export default function PlaySessionPage({
   }
 
   function handleSelectMode(selectedMode: McqMode) {
-    if (!question || myAnswer) return;
+    if (!question || myAnswer || isTimeOver) return;
 
     setMode(selectedMode);
 
@@ -362,7 +373,7 @@ export default function PlaySessionPage({
     answerIndex?: number;
     cashAnswer?: string;
   }) {
-    if (!session || !question || !playerId || myAnswer) return;
+    if (!session || !question || !playerId || myAnswer || isTimeOver) return;
 
     const correctAnswer = question.options[question.answer_index];
 
@@ -424,14 +435,39 @@ export default function PlaySessionPage({
   }, [params.sessionId]);
 
   useEffect(() => {
-    if (!currentQuestionId) {
-      setQuestion(null);
-      return;
-    }
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from("school_game_sessions")
+        .select("status, current_question_index, question_started_at")
+        .eq("id", params.sessionId)
+        .maybeSingle();
 
-    loadCurrentQuestion(currentQuestionId);
+      if (!data) return;
+
+      setSession((current) => {
+        if (!current) return current;
+
+        return {
+          ...current,
+          status: data.status as Session["status"],
+          current_question_index: data.current_question_index,
+          question_started_at: data.question_started_at,
+        };
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [params.sessionId, supabase]);
+
+  useEffect(() => {
+    if (!session || session.status !== "playing") return;
+
+    const questionId = session.question_ids?.[session.current_question_index];
+    if (!questionId) return;
+
+    loadCurrentQuestion(questionId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQuestionId]);
+  }, [session?.current_question_index, session?.status, supabase]);
 
   useEffect(() => {
     if (session) {
@@ -439,6 +475,25 @@ export default function PlaySessionPage({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.id, session?.current_question_index, playerId]);
+
+  useEffect(() => {
+    if (!session?.question_started_at || session.status !== "playing") {
+      setTimeLeft(QUESTION_DURATION);
+      return;
+    }
+
+    const updateTimer = () => {
+      const start = new Date(session.question_started_at!).getTime();
+      const elapsed = Math.floor((Date.now() - start) / 1000);
+      setTimeLeft(Math.max(QUESTION_DURATION - elapsed, 0));
+    };
+
+    updateTimer();
+
+    const interval = setInterval(updateTimer, 500);
+
+    return () => clearInterval(interval);
+  }, [session?.question_started_at, session?.status]);
 
   useEffect(() => {
     const channel = supabase
@@ -525,9 +580,6 @@ export default function PlaySessionPage({
     );
   }
 
-  const answerCount = answers.length;
-  const correctCount = answers.filter((answer) => answer.is_correct).length;
-
   return (
     <main className="min-h-screen bg-gray-950 px-4 py-8 text-white">
       <div className="mx-auto w-full max-w-4xl">
@@ -559,14 +611,6 @@ export default function PlaySessionPage({
                   Mode professeur
                 </p>
               )}
-
-              {isTeacher && (
-                <p className="mt-2 text-xs text-gray-500">
-                  Debug → status: {session.status} | index:{" "}
-                  {session.current_question_index} | questions:{" "}
-                  {session.question_ids?.length ?? 0}
-                </p>
-              )}
             </div>
 
             <div className="rounded-2xl border border-gray-800 bg-gray-950 px-4 py-3 text-sm">
@@ -575,8 +619,8 @@ export default function PlaySessionPage({
                 {session.status === "waiting"
                   ? "En attente"
                   : session.status === "playing"
-                    ? "En cours"
-                    : "Terminée"}
+                  ? "En cours"
+                  : "Terminée"}
               </span>
             </div>
           </div>
@@ -644,77 +688,122 @@ export default function PlaySessionPage({
           )}
 
           {session.status === "waiting" && (
-            <div className="mt-8 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-6 text-center">
-              <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-amber-500 border-t-transparent" />
+            <div className="mt-8 overflow-hidden rounded-3xl border border-amber-500/20 bg-gray-950">
+              <div className="relative bg-gradient-to-br from-amber-500/20 via-gray-950 to-gray-950 p-8 text-center">
+                <div className="absolute left-1/2 top-0 h-40 w-80 -translate-x-1/2 rounded-full bg-amber-400/20 blur-3xl" />
 
-              <h2 className="text-2xl font-black">
-                En attente du lancement par le professeur
-              </h2>
+                <p className="relative text-sm font-black uppercase tracking-[0.3em] text-amber-400">
+                  Lobby de classe
+                </p>
 
-              <p className="mt-2 text-gray-400">
-                Reste sur cette page. La partie commencera automatiquement.
-              </p>
+                <h2 className="relative mt-3 text-3xl font-black text-white">
+                  {isTeacher
+                    ? "Invite tes élèves à rejoindre la partie"
+                    : "En attente du professeur"}
+                </h2>
+
+                <div className="relative mx-auto mt-6 max-w-md rounded-3xl border border-amber-500/30 bg-gray-950/80 p-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-500">
+                    Code de session
+                  </p>
+
+                  <p className="mt-2 font-mono text-6xl font-black tracking-widest text-amber-400">
+                    {session.code}
+                  </p>
+
+                  <p className="mt-3 text-sm text-gray-500">
+                    Les élèves vont sur{" "}
+                    <span className="font-bold text-white">/join</span> et
+                    entrent ce code.
+                  </p>
+                </div>
+
+                {isTeacher && (
+                  <button
+                    type="button"
+                    onClick={startSession}
+                    disabled={players.length === 0}
+                    className="relative mt-6 rounded-2xl bg-green-500 px-8 py-4 text-lg font-black text-gray-950 transition hover:bg-green-400 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    🚀 Lancer la partie
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
           {session.status === "playing" && (
             <div className="mt-8 rounded-3xl border border-green-500/20 bg-green-500/10 p-6">
-              <p className="text-sm font-bold uppercase tracking-widest text-green-300">
-                Question {session.current_question_index + 1} /{" "}
-                {session.question_ids.length}
-              </p>
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-bold uppercase tracking-widest text-green-300">
+                  Question {session.current_question_index + 1} /{" "}
+                  {session.question_ids.length}
+                </p>
+
+                <div
+                  className={`rounded-full px-4 py-2 text-2xl font-black ${
+                    timeLeft <= 5
+                      ? "bg-red-500 text-white"
+                      : "bg-amber-500 text-gray-950"
+                  }`}
+                >
+                  {timeLeft}s
+                </div>
+              </div>
 
               {question ? (
                 <>
-                  <h2 className="mt-3 text-3xl font-black text-white">
+                  <h2 className="mt-5 text-3xl font-black text-white">
                     {question.question}
                   </h2>
 
-                  {question.period && (
-                    <p className="mt-2 text-sm text-gray-400">
-                      Période : {question.period}
-                    </p>
+                  {isTimeOver && !myAnswer && !isTeacher && (
+                    <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-300">
+                      Temps écoulé. Tu ne peux plus répondre.
+                    </div>
                   )}
 
                   {isTeacher ? (
-                    <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5">
-                      <h3 className="text-lg font-black">Réponses live</h3>
+                    <>
+                      <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5">
+                        <h3 className="text-lg font-black">Réponses live</h3>
 
-                      <p className="mt-2 text-gray-400">
-                        {answerCount}/{players.length} joueur(s) ont répondu ·{" "}
-                        <span className="text-green-400">
-                          {correctCount} correcte(s)
-                        </span>
-                      </p>
+                        <p className="mt-2 text-gray-400">
+                          {answerCount}/{players.length} joueur(s) ont répondu ·{" "}
+                          <span className="text-green-400">
+                            {correctCount} correcte(s)
+                          </span>
+                        </p>
+                      </div>
 
-                      <div className="mt-4 space-y-2">
-                        {answers.map((answer) => {
-                          const player = players.find(
-                            (p) => p.id === answer.player_id
-                          );
+                      <div className="mt-6 rounded-2xl border border-gray-800 bg-gray-950 p-5">
+                        <h3 className="text-lg font-black text-white">
+                          Classement
+                        </h3>
 
-                          return (
+                        <div className="mt-4 space-y-2">
+                          {players.slice(0, 5).map((player, index) => (
                             <div
-                              key={answer.id}
-                              className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-                                answer.is_correct
-                                  ? "border-green-500/30 bg-green-500/10"
-                                  : "border-red-500/30 bg-red-500/10"
-                              }`}
+                              key={player.id}
+                              className="flex items-center justify-between rounded-xl border border-gray-800 bg-gray-900 px-4 py-3"
                             >
-                              <span className="font-bold">
-                                {player?.nickname ?? "Joueur"}
-                              </span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-xl font-black text-amber-400">
+                                  #{index + 1}
+                                </span>
+                                <span className="font-bold text-white">
+                                  {player.nickname}
+                                </span>
+                              </div>
 
-                              <span className="text-sm font-black">
-                                {answer.is_correct ? "✅" : "❌"} +
-                                {answer.points}
+                              <span className="font-black text-green-400">
+                                {player.score} pts
                               </span>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
-                    </div>
+                    </>
                   ) : myAnswer ? (
                     <div
                       className={`mt-6 rounded-2xl border p-5 ${
@@ -737,7 +826,11 @@ export default function PlaySessionPage({
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-6">
+                    <div
+                      className={`mt-6 ${
+                        isTimeOver ? "pointer-events-none opacity-40" : ""
+                      }`}
+                    >
                       {!isTrueFalse && mode === null && (
                         <div>
                           <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-500">
@@ -750,8 +843,9 @@ export default function PlaySessionPage({
                                 <button
                                   key={choice}
                                   type="button"
+                                  disabled={isTimeOver}
                                   onClick={() => handleSelectMode(choice)}
-                                  className="flex flex-col items-center gap-1 rounded-xl border border-gray-700 bg-gray-950 px-3 py-4 transition hover:border-amber-500/50 hover:bg-gray-900"
+                                  className="flex flex-col items-center gap-1 rounded-xl border border-gray-700 bg-gray-950 px-3 py-4 transition hover:border-amber-500/50 hover:bg-gray-900 disabled:cursor-not-allowed"
                                 >
                                   <span className="font-black text-white">
                                     {MODE_LABELS[choice]}
@@ -772,17 +866,22 @@ export default function PlaySessionPage({
                             <input
                               type="text"
                               value={cashInput}
+                              disabled={isTimeOver}
                               onChange={(event) =>
                                 setCashInput(event.target.value)
                               }
                               onKeyDown={(event) => {
-                                if (event.key === "Enter" && cashInput.trim()) {
+                                if (
+                                  event.key === "Enter" &&
+                                  cashInput.trim() &&
+                                  !isTimeOver
+                                ) {
                                   submitAnswer({ cashAnswer: cashInput });
                                 }
                               }}
                               placeholder="Ta réponse..."
                               autoFocus
-                              className="flex-1 rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+                              className="flex-1 rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 text-white outline-none placeholder:text-gray-600 focus:border-amber-500 disabled:cursor-not-allowed"
                             />
 
                             <button
@@ -790,7 +889,7 @@ export default function PlaySessionPage({
                               onClick={() =>
                                 submitAnswer({ cashAnswer: cashInput })
                               }
-                              disabled={!cashInput.trim()}
+                              disabled={!cashInput.trim() || isTimeOver}
                               className="rounded-xl bg-amber-500 px-5 py-3 font-black text-gray-950 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               Valider
@@ -808,10 +907,11 @@ export default function PlaySessionPage({
                               <button
                                 key={index}
                                 type="button"
+                                disabled={isTimeOver}
                                 onClick={() =>
                                   submitAnswer({ answerIndex: index })
                                 }
-                                className={`rounded-xl border border-gray-700 bg-gray-950 px-4 py-4 text-sm font-bold text-gray-200 transition hover:border-amber-500/50 hover:bg-gray-900 ${
+                                className={`rounded-xl border border-gray-700 bg-gray-950 px-4 py-4 text-sm font-bold text-gray-200 transition hover:border-amber-500/50 hover:bg-gray-900 disabled:cursor-not-allowed ${
                                   isTwoCol ? "text-center" : "text-left"
                                 }`}
                               >
@@ -835,47 +935,6 @@ export default function PlaySessionPage({
               )}
             </div>
           )}
-
-          {session.status === "finished" && (
-            <div className="mt-8 rounded-3xl border border-gray-800 bg-gray-950 p-6 text-center">
-              <h2 className="text-2xl font-black">Partie terminée</h2>
-            </div>
-          )}
-
-          <div className="mt-8">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-xl font-black">Participants</h2>
-
-              <span className="rounded-full bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300">
-                {players.length}
-              </span>
-            </div>
-
-            {players.length === 0 ? (
-              <div className="rounded-2xl border border-gray-800 bg-gray-950 p-5 text-gray-400">
-                Aucun joueur pour le moment.
-              </div>
-            ) : (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {players.map((player) => (
-                  <div
-                    key={player.id}
-                    className={`rounded-2xl border p-4 ${
-                      player.id === playerId
-                        ? "border-amber-500/50 bg-amber-500/10"
-                        : "border-gray-800 bg-gray-950"
-                    }`}
-                  >
-                    <p className="font-black">{player.nickname}</p>
-
-                    <p className="mt-1 text-sm text-gray-500">
-                      Score : {player.score}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </div>
     </main>

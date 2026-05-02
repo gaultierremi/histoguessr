@@ -401,6 +401,40 @@ export default async function Home() {
             </section>
           </div>
 
+<div className="grid gap-3 md:grid-cols-2">
+  <Link
+    href="/school"
+    className="group flex items-center gap-4 rounded-3xl border border-green-500/30 bg-green-500/10 p-5 transition-all hover:-translate-y-0.5 hover:border-green-400 hover:bg-green-500/15 active:scale-[0.98]"
+  >
+    <span className="text-3xl leading-none">🏫</span>
+    <div className="min-w-0 flex-1">
+      <p className="text-base font-black text-white">School</p>
+      <p className="text-sm text-gray-500">
+        Espace professeur : créer une session, gérer les quiz et les classes.
+      </p>
+    </div>
+    <span className="text-gray-600 transition group-hover:translate-x-1 group-hover:text-green-400">
+      →
+    </span>
+  </Link>
+
+  <Link
+    href="/join"
+    className="group flex items-center gap-4 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-5 transition-all hover:-translate-y-0.5 hover:border-amber-400 hover:bg-amber-500/15 active:scale-[0.98]"
+  >
+    <span className="text-3xl leading-none">🎮</span>
+    <div className="min-w-0 flex-1">
+      <p className="text-base font-black text-white">Rejoindre une classe</p>
+      <p className="text-sm text-gray-500">
+        Entre le code du professeur et joue sans créer de compte.
+      </p>
+    </div>
+    <span className="text-gray-600 transition group-hover:translate-x-1 group-hover:text-amber-400">
+      →
+    </span>
+  </Link>
+</div>
+
           <Link
             href="/scoreboard"
             className="group flex items-center gap-4 rounded-3xl border border-gray-800 bg-gray-900 p-5 transition-all hover:-translate-y-0.5 hover:border-amber-500/40 hover:bg-gray-800/80 active:scale-[0.98]"
