@@ -9,7 +9,7 @@ import {
   type McqMode,
 } from "@/components/QuizCard";
 
-const QUESTION_DURATION = 15;
+const DEFAULT_QUESTION_DURATION = 15;
 
 type Session = {
   id: string;
@@ -20,6 +20,8 @@ type Session = {
   current_question_index: number;
   question_ids: string[];
   question_started_at: string | null;
+  question_duration: number;
+  auto_advance: boolean;
 };
 
 type Player = {
@@ -73,12 +75,18 @@ export default function PlaySessionPage({
   const [duoIndices, setDuoIndices] = useState<[number, number] | null>(null);
   const [cashInput, setCashInput] = useState("");
 
-  const [timeLeft, setTimeLeft] = useState(QUESTION_DURATION);
+  const [timeLeft, setTimeLeft] = useState(DEFAULT_QUESTION_DURATION);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [autoAdvanceLockedIndex, setAutoAdvanceLockedIndex] = useState<
+    number | null
+  >(null);
 
   const currentQuestionId =
     session?.question_ids?.[session.current_question_index] ?? null;
+
+  const questionDuration =
+    session?.question_duration ?? DEFAULT_QUESTION_DURATION;
 
   const isTrueFalse = question?.type === "truefalse";
   const effectiveMode: McqMode | "truefalse" = isTrueFalse
@@ -104,20 +112,19 @@ export default function PlaySessionPage({
   const showReveal = session?.status === "playing" && isTimeOver;
 
   async function loadPlayers() {
-  const { data, error } = await supabase
-    .from("session_players")
-    .select("id, nickname, score")
-    .eq("session_id", params.sessionId)
-    .order("joined_at", { ascending: true });
+    const { data, error } = await supabase
+      .from("session_players")
+      .select("id, nickname, score")
+      .eq("session_id", params.sessionId)
+      .order("score", { ascending: false });
 
-  if (error) {
-    console.error("loadPlayers error", error);
-    setMessage("Impossible de charger les joueurs.");
-    return;
+    if (error) {
+      setMessage("Impossible de charger les joueurs.");
+      return;
+    }
+
+    setPlayers((data ?? []) as Player[]);
   }
-
-  setPlayers((data ?? []) as Player[]);
-}
 
   async function loadAnswers() {
     if (!session) return;
@@ -169,7 +176,7 @@ export default function PlaySessionPage({
     const { data: sessionData, error: sessionError } = await supabase
       .from("school_game_sessions")
       .select(
-        "id, code, title, teacher_id, status, current_question_index, question_ids, question_started_at"
+        "id, code, title, teacher_id, status, current_question_index, question_ids, question_started_at, question_duration, auto_advance"
       )
       .eq("id", params.sessionId)
       .maybeSingle();
@@ -222,6 +229,41 @@ export default function PlaySessionPage({
     setMyAnswer(null);
   }
 
+  async function updateSessionSettings({
+    questionDuration,
+    autoAdvance,
+  }: {
+    questionDuration?: number;
+    autoAdvance?: boolean;
+  }) {
+    if (!session || !isTeacher) return;
+
+    const patch: Partial<Session> = {};
+
+    if (typeof questionDuration === "number") {
+      patch.question_duration = questionDuration;
+    }
+
+    if (typeof autoAdvance === "boolean") {
+      patch.auto_advance = autoAdvance;
+    }
+
+    const { error } = await supabase
+      .from("school_game_sessions")
+      .update(patch)
+      .eq("id", session.id);
+
+    if (error) {
+      alert("Impossible de modifier les réglages.");
+      return;
+    }
+
+    setSession({
+      ...session,
+      ...patch,
+    });
+  }
+
   async function startSession() {
     if (!session) return;
 
@@ -256,33 +298,34 @@ export default function PlaySessionPage({
   }
 
   async function nextQuestion() {
-  if (!session) return;
+    if (!session) return;
 
-  const nextIndex = session.current_question_index + 1;
+    const nextIndex = session.current_question_index + 1;
 
-  if (nextIndex >= session.question_ids.length) {
-    await finishSession();
-    return;
+    if (nextIndex >= session.question_ids.length) {
+      await finishSession();
+      return;
+    }
+
+    const { error } = await supabase.rpc("next_school_session_question", {
+      target_session_id: session.id,
+    });
+
+    if (error) {
+      alert("Impossible de passer à la question suivante.");
+      return;
+    }
+
+    setQuestion(null);
+    setMyAnswer(null);
+    setAnswers([]);
+    setMode(null);
+    setDuoIndices(null);
+    setCashInput("");
+    setAutoAdvanceLockedIndex(null);
+
+    await loadSession();
   }
-
-  const { error } = await supabase.rpc("next_school_session_question", {
-    target_session_id: session.id,
-  });
-
-  if (error) {
-    alert("Impossible de passer à la question suivante.");
-    return;
-  }
-
-  setQuestion(null);
-  setMyAnswer(null);
-  setAnswers([]);
-  setMode(null);
-  setDuoIndices(null);
-  setCashInput("");
-
-  await loadSession();
-}
 
   async function resetSession() {
     if (!session) return;
@@ -440,33 +483,45 @@ export default function PlaySessionPage({
   }, [params.sessionId]);
 
   useEffect(() => {
-  const interval = setInterval(async () => {
-    const { data } = await supabase
-      .from("school_game_sessions")
-      .select("status, current_question_index, question_started_at, question_ids")
-      .eq("id", params.sessionId)
-      .maybeSingle();
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from("school_game_sessions")
+        .select(
+          "status, current_question_index, question_started_at, question_ids, question_duration, auto_advance"
+        )
+        .eq("id", params.sessionId)
+        .maybeSingle();
 
-    if (!data) return;
+      if (!data) return;
 
-    setSession((current) => {
-      if (!current) return current;
+      setSession((current) => {
+        if (!current) return current;
 
-      return {
-        ...current,
-        status: data.status as Session["status"],
-        current_question_index: data.current_question_index,
-        question_started_at: data.question_started_at,
-        question_ids: data.question_ids ?? [],
-      };
-    });
+        return {
+          ...current,
+          status: data.status as Session["status"],
+          current_question_index: data.current_question_index,
+          question_started_at: data.question_started_at,
+          question_ids: data.question_ids ?? [],
+          question_duration:
+            data.question_duration ?? DEFAULT_QUESTION_DURATION,
+          auto_advance: data.auto_advance ?? false,
+        };
+      });
 
-    await loadPlayers();
-    await loadAnswers();
-  }, 1000);
+      await loadPlayers();
+      await loadAnswers();
+    }, 1000);
 
-  return () => clearInterval(interval);
-}, [params.sessionId, supabase, session?.id, session?.current_question_index, playerId]);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    params.sessionId,
+    supabase,
+    session?.id,
+    session?.current_question_index,
+    playerId,
+  ]);
 
   useEffect(() => {
     if (!session || session.status !== "playing") return;
@@ -475,6 +530,7 @@ export default function PlaySessionPage({
     if (!questionId) return;
 
     loadCurrentQuestion(questionId);
+    setAutoAdvanceLockedIndex(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.current_question_index, session?.status, supabase]);
 
@@ -487,14 +543,14 @@ export default function PlaySessionPage({
 
   useEffect(() => {
     if (!session?.question_started_at || session.status !== "playing") {
-      setTimeLeft(QUESTION_DURATION);
+      setTimeLeft(questionDuration);
       return;
     }
 
     const updateTimer = () => {
       const start = new Date(session.question_started_at!).getTime();
       const elapsed = Math.floor((Date.now() - start) / 1000);
-      setTimeLeft(Math.max(QUESTION_DURATION - elapsed, 0));
+      setTimeLeft(Math.max(questionDuration - elapsed, 0));
     };
 
     updateTimer();
@@ -502,7 +558,29 @@ export default function PlaySessionPage({
     const interval = setInterval(updateTimer, 500);
 
     return () => clearInterval(interval);
-  }, [session?.question_started_at, session?.status]);
+  }, [session?.question_started_at, session?.status, questionDuration]);
+
+  useEffect(() => {
+    if (!session) return;
+    if (!isTeacher) return;
+    if (!session.auto_advance) return;
+    if (!showReveal) return;
+    if (autoAdvanceLockedIndex === session.current_question_index) return;
+
+    setAutoAdvanceLockedIndex(session.current_question_index);
+
+    const timeout = setTimeout(() => {
+      nextQuestion();
+    }, 2500);
+
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    showReveal,
+    isTeacher,
+    session?.auto_advance,
+    session?.current_question_index,
+  ]);
 
   useEffect(() => {
     const channel = supabase
@@ -638,6 +716,53 @@ export default function PlaySessionPage({
             <div className="mt-6 rounded-3xl border border-gray-800 bg-gray-950 p-5">
               <h2 className="text-lg font-black">Contrôles professeur</h2>
 
+              {session.status === "waiting" && (
+                <div className="mt-4 grid gap-4 rounded-2xl border border-gray-800 bg-gray-900 p-4 sm:grid-cols-2">
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+                      Temps par question
+                    </label>
+
+                    <select
+                      value={session.question_duration}
+                      onChange={(event) =>
+                        updateSessionSettings({
+                          questionDuration: Number(event.target.value),
+                        })
+                      }
+                      className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-3 font-bold text-white outline-none focus:border-amber-500"
+                    >
+                      <option value={10}>10 secondes</option>
+                      <option value={15}>15 secondes</option>
+                      <option value={20}>20 secondes</option>
+                      <option value={30}>30 secondes</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+                      Enchaînement automatique
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateSessionSettings({
+                          autoAdvance: !session.auto_advance,
+                        })
+                      }
+                      className={`mt-2 w-full rounded-xl px-4 py-3 font-black transition ${
+                        session.auto_advance
+                          ? "bg-green-500 text-gray-950 hover:bg-green-400"
+                          : "border border-gray-700 bg-gray-950 text-gray-300 hover:bg-gray-800"
+                      }`}
+                    >
+                      {session.auto_advance ? "Activé" : "Désactivé"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 {session.status === "waiting" && (
                   <button
@@ -651,13 +776,15 @@ export default function PlaySessionPage({
 
                 {session.status === "playing" && (
                   <>
-                    <button
-                      type="button"
-                      onClick={nextQuestion}
-                      className="rounded-2xl bg-amber-500 px-5 py-3 font-black text-gray-950 transition hover:bg-amber-400"
-                    >
-                      Question suivante →
-                    </button>
+                    {!session.auto_advance && (
+                      <button
+                        type="button"
+                        onClick={nextQuestion}
+                        className="rounded-2xl bg-amber-500 px-5 py-3 font-black text-gray-950 transition hover:bg-amber-400"
+                      >
+                        Question suivante →
+                      </button>
+                    )}
 
                     <button
                       type="button"
@@ -693,43 +820,6 @@ export default function PlaySessionPage({
                   Nettoyer joueurs
                 </button>
               </div>
-              <div className="border-t border-gray-800 p-6">
-  <div className="mb-4 flex items-center justify-between">
-    <h3 className="text-xl font-black text-white">Élèves connectés</h3>
-
-    <span className="rounded-full bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300">
-      {players.length}
-    </span>
-  </div>
-
-  {players.length === 0 ? (
-    <div className="rounded-2xl border border-dashed border-gray-800 bg-gray-900/50 p-6 text-center text-gray-500">
-      Aucun élève pour le moment.
-    </div>
-  ) : (
-    <div className="grid gap-3 sm:grid-cols-2">
-      {players.map((player, index) => (
-        <div
-          key={player.id}
-          className={`flex items-center justify-between rounded-2xl border p-4 ${
-            player.id === playerId
-              ? "border-amber-500/50 bg-amber-500/10"
-              : "border-gray-800 bg-gray-900"
-          }`}
-        >
-          <div>
-            <p className="font-black text-white">
-              #{index + 1} {player.nickname}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">Prêt à jouer</p>
-          </div>
-
-          <span className="text-2xl">✅</span>
-        </div>
-      ))}
-    </div>
-  )}
-</div>
             </div>
           )}
 
@@ -762,6 +852,13 @@ export default function PlaySessionPage({
                     <span className="font-bold text-white">/join</span> et
                     entrent ce code.
                   </p>
+
+                  <p className="mt-3 text-xs text-gray-500">
+                    {session.question_duration}s/question ·{" "}
+                    {session.auto_advance
+                      ? "enchaînement automatique"
+                      : "enchaînement manuel"}
+                  </p>
                 </div>
 
                 {isTeacher && (
@@ -773,6 +870,48 @@ export default function PlaySessionPage({
                   >
                     🚀 Lancer la partie
                   </button>
+                )}
+              </div>
+
+              <div className="border-t border-gray-800 p-6">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-xl font-black text-white">
+                    Élèves connectés
+                  </h3>
+
+                  <span className="rounded-full bg-gray-800 px-3 py-1 text-sm font-bold text-gray-300">
+                    {players.length}
+                  </span>
+                </div>
+
+                {players.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-gray-800 bg-gray-900/50 p-6 text-center text-gray-500">
+                    Aucun élève pour le moment.
+                  </div>
+                ) : (
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {players.map((player, index) => (
+                      <div
+                        key={player.id}
+                        className={`flex items-center justify-between rounded-2xl border p-4 ${
+                          player.id === playerId
+                            ? "border-amber-500/50 bg-amber-500/10"
+                            : "border-gray-800 bg-gray-900"
+                        }`}
+                      >
+                        <div>
+                          <p className="font-black text-white">
+                            #{index + 1} {player.nickname}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            Prêt à jouer
+                          </p>
+                        </div>
+
+                        <span className="text-2xl">✅</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
