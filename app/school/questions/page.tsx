@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
 type TeacherQuestion = {
   id: string;
   teacher_id: string;
@@ -12,6 +16,7 @@ type TeacherQuestion = {
   answer_index: number;
   explanation: string | null;
   subject: string | null;
+  period: string | null;
   is_public: boolean;
   created_at: string;
 };
@@ -34,8 +39,33 @@ type DraftQuestion = {
   options: string[];
   answer_index: number;
   explanation: string;
+  period: string;
   kept: boolean;
 };
+
+type ProposeState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "proposed" }
+  | { kind: "duplicate"; similarText: string };
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const PERIODS = [
+  "Préhistoire",
+  "Antiquité",
+  "Moyen Âge",
+  "Renaissance",
+  "XVIe siècle",
+  "XVIIe siècle",
+  "XVIIIe siècle",
+  "XIXe siècle",
+  "XXe siècle",
+  "XXIe siècle",
+  "Autre",
+] as const;
 
 const BLANK_FORM = {
   type: "mcq" as "mcq" | "truefalse",
@@ -44,10 +74,11 @@ const BLANK_FORM = {
   answer_index: 0,
   explanation: "",
   subject: "",
+  period: "",
 };
 
 // ---------------------------------------------------------------------------
-// Sub-components
+// Small helpers
 // ---------------------------------------------------------------------------
 
 function TypeBadge({ type }: { type: "mcq" | "truefalse" }) {
@@ -63,6 +94,63 @@ function TypeBadge({ type }: { type: "mcq" | "truefalse" }) {
     </span>
   );
 }
+
+function FilterBar({
+  filterType,
+  setFilterType,
+  filterPeriod,
+  setFilterPeriod,
+  filterText,
+  setFilterText,
+  showText = false,
+}: {
+  filterType: string;
+  setFilterType: (v: string) => void;
+  filterPeriod: string;
+  setFilterPeriod: (v: string) => void;
+  filterText?: string;
+  setFilterText?: (v: string) => void;
+  showText?: boolean;
+}) {
+  return (
+    <div className="mb-5 flex flex-wrap gap-2">
+      {showText && setFilterText !== undefined && (
+        <input
+          type="text"
+          value={filterText ?? ""}
+          onChange={(e) => setFilterText(e.target.value)}
+          placeholder="Rechercher..."
+          className="flex-1 min-w-[160px] rounded-xl border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+        />
+      )}
+      <select
+        value={filterType}
+        onChange={(e) => setFilterType(e.target.value)}
+        className="rounded-xl border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+      >
+        <option value="">Tous les types</option>
+        <option value="mcq">QCM</option>
+        <option value="truefalse">Vrai / Faux</option>
+      </select>
+      <select
+        value={filterPeriod}
+        onChange={(e) => setFilterPeriod(e.target.value)}
+        className="rounded-xl border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+      >
+        <option value="">Toutes les périodes</option>
+        {PERIODS.map((p) => (
+          <option key={p} value={p}>
+            {p}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// QuestionForm
+// ---------------------------------------------------------------------------
 
 function QuestionForm({
   form,
@@ -88,6 +176,7 @@ function QuestionForm({
         {isEdit ? "Modifier la question" : "Nouvelle question"}
       </h2>
 
+      {/* Row 1: type + period */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label className="text-xs font-black uppercase tracking-widest text-gray-500">
@@ -104,24 +193,44 @@ function QuestionForm({
             }
             className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
           >
-            <option value="mcq">QCM (4 options)</option>
-            <option value="truefalse">Vrai / Faux</option>
+            <option value="mcq">QCM — Carré (4 options)</option>
+            <option value="truefalse">Vrai / Faux — Duo (2 options)</option>
           </select>
         </div>
 
         <div>
           <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-            Matière (optionnel)
+            Période historique
           </label>
-          <input
-            value={form.subject}
-            onChange={(e) => setForm({ ...form, subject: e.target.value })}
-            placeholder="Ex : Histoire, SVT..."
-            className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
-          />
+          <select
+            value={form.period}
+            onChange={(e) => setForm({ ...form, period: e.target.value })}
+            className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
+          >
+            <option value="">Sélectionner une période</option>
+            {PERIODS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
+      {/* Row 2: subject */}
+      <div className="mt-4">
+        <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+          Matière (optionnel)
+        </label>
+        <input
+          value={form.subject}
+          onChange={(e) => setForm({ ...form, subject: e.target.value })}
+          placeholder="Ex : Histoire, SVT, Géographie..."
+          className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+        />
+      </div>
+
+      {/* Question text */}
       <div className="mt-4">
         <label className="text-xs font-black uppercase tracking-widest text-gray-500">
           Question
@@ -135,11 +244,18 @@ function QuestionForm({
         />
       </div>
 
+      {/* Options */}
       <div className="mt-4">
         <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-          Options {!isTrueFalse && "— clique pour marquer la bonne réponse"}
+          {isTrueFalse
+            ? "Réponse correcte"
+            : "Options — clique sur le cercle pour marquer la bonne réponse"}
         </label>
-        <div className={`mt-2 grid gap-2 ${isTrueFalse ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"}`}>
+        <div
+          className={`mt-2 grid gap-2 ${
+            isTrueFalse ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"
+          }`}
+        >
           {displayOptions.map((opt, i) => (
             <div key={i} className="flex items-center gap-2">
               <button
@@ -148,11 +264,18 @@ function QuestionForm({
                 className={`shrink-0 h-6 w-6 rounded-full border-2 transition ${
                   form.answer_index === i
                     ? "border-green-500 bg-green-500"
-                    : "border-gray-600"
+                    : "border-gray-600 hover:border-gray-400"
                 }`}
+                aria-label={`Marquer option ${i + 1} comme correcte`}
               />
               {isTrueFalse ? (
-                <span className="font-bold text-white">{opt}</span>
+                <span
+                  className={`font-bold ${
+                    form.answer_index === i ? "text-green-300" : "text-white"
+                  }`}
+                >
+                  {opt}
+                </span>
               ) : (
                 <input
                   value={form.options[i] ?? ""}
@@ -162,7 +285,11 @@ function QuestionForm({
                     setForm({ ...form, options: next });
                   }}
                   placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                  className="w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+                  className={`w-full rounded-xl border px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-amber-500 ${
+                    form.answer_index === i
+                      ? "border-green-500/50 bg-green-500/10"
+                      : "border-gray-700 bg-gray-950"
+                  }`}
                 />
               )}
             </div>
@@ -170,6 +297,7 @@ function QuestionForm({
         </div>
       </div>
 
+      {/* Explanation */}
       <div className="mt-4">
         <label className="text-xs font-black uppercase tracking-widest text-gray-500">
           Explication (optionnel)
@@ -194,7 +322,7 @@ function QuestionForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-2xl border border-gray-700 px-5 py-3 font-bold text-gray-300"
+          className="rounded-2xl border border-gray-700 px-5 py-3 font-bold text-gray-300 hover:text-white"
         >
           Annuler
         </button>
@@ -203,23 +331,39 @@ function QuestionForm({
   );
 }
 
+// ---------------------------------------------------------------------------
+// QuestionCard
+// ---------------------------------------------------------------------------
+
 function QuestionCard({
   q,
   onEdit,
   onDelete,
   onTogglePublic,
+  proposeState,
+  onPropose,
+  onForcePropose,
 }: {
   q: TeacherQuestion;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePublic: () => void;
+  proposeState: ProposeState;
+  onPropose: () => void;
+  onForcePropose: () => void;
 }) {
   return (
     <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
       <div className="flex items-start gap-3">
+        {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <TypeBadge type={q.type} />
+            {q.period && (
+              <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+                {q.period}
+              </span>
+            )}
             {q.subject && (
               <span className="text-xs text-gray-500">{q.subject}</span>
             )}
@@ -244,7 +388,8 @@ function QuestionCard({
           )}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+        {/* Action buttons */}
+        <div className="flex shrink-0 flex-col gap-1.5">
           <button
             onClick={onTogglePublic}
             className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
@@ -269,9 +414,52 @@ function QuestionCard({
           </button>
         </div>
       </div>
+
+      {/* Propose section */}
+      <div className="mt-3 border-t border-gray-800 pt-3">
+        {proposeState.kind === "idle" && (
+          <button
+            onClick={onPropose}
+            className="rounded-xl bg-indigo-500/20 px-3 py-1.5 text-xs font-black text-indigo-300 transition hover:bg-indigo-500/30"
+          >
+            📤 Proposer au site HistoGuess
+          </button>
+        )}
+
+        {proposeState.kind === "loading" && (
+          <span className="text-xs text-gray-500">Vérification en cours...</span>
+        )}
+
+        {proposeState.kind === "proposed" && (
+          <span className="inline-flex items-center gap-1.5 rounded-xl bg-green-500/20 px-3 py-1.5 text-xs font-black text-green-300">
+            ✓ Proposée au site
+          </span>
+        )}
+
+        {proposeState.kind === "duplicate" && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+            <p className="text-xs font-black text-amber-300">
+              ⚠️ Question similaire déjà existante :
+            </p>
+            <p className="mt-1 text-xs italic text-gray-400">
+              &ldquo;{proposeState.similarText}&rdquo;
+            </p>
+            <button
+              onClick={onForcePropose}
+              className="mt-2 rounded-lg bg-amber-500/30 px-3 py-1.5 text-xs font-black text-amber-200 hover:bg-amber-500/50"
+            >
+              Proposer quand même
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// PdfUploadZone
+// ---------------------------------------------------------------------------
 
 function PdfUploadZone({
   loading,
@@ -295,11 +483,15 @@ function PdfUploadZone({
   return (
     <div className="space-y-4">
       <p className="text-gray-400">
-        Dépose un PDF de cours et l&apos;IA génère des questions automatiquement.
+        Dépose un PDF de cours et l&apos;IA génère des questions avec détection
+        automatique de la période historique.
       </p>
 
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragging(true);
+        }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
@@ -313,13 +505,17 @@ function PdfUploadZone({
           <>
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-700 border-t-amber-500" />
             <p className="mt-4 font-bold text-amber-400">Analyse en cours...</p>
-            <p className="mt-1 text-sm text-gray-500">Cela peut prendre quelques secondes</p>
+            <p className="mt-1 text-sm text-gray-500">
+              Cela peut prendre quelques secondes
+            </p>
           </>
         ) : (
           <>
             <span className="text-5xl">📄</span>
             <p className="mt-4 font-black text-white">Dépose ton PDF ici</p>
-            <p className="mt-1 text-sm text-gray-500">ou clique pour parcourir</p>
+            <p className="mt-1 text-sm text-gray-500">
+              ou clique pour parcourir
+            </p>
           </>
         )}
       </div>
@@ -344,6 +540,10 @@ function PdfUploadZone({
   );
 }
 
+// ---------------------------------------------------------------------------
+// DraftCard
+// ---------------------------------------------------------------------------
+
 function DraftCard({
   draft,
   onChange,
@@ -364,6 +564,11 @@ function DraftCard({
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <TypeBadge type={draft.type} />
+          {draft.period && (
+            <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
+              {draft.period}
+            </span>
+          )}
           <span className="text-xs text-gray-500">
             {draft.kept ? "À conserver" : "Ignorée"}
           </span>
@@ -372,7 +577,9 @@ function DraftCard({
           <button
             onClick={() => onChange({ ...draft, kept: true })}
             className={`rounded-xl px-3 py-1.5 text-xs font-black ${
-              draft.kept ? "bg-green-500 text-gray-950" : "border border-gray-700 text-gray-500"
+              draft.kept
+                ? "bg-green-500 text-gray-950"
+                : "border border-gray-700 text-gray-500"
             }`}
           >
             ✓ Garder
@@ -380,7 +587,9 @@ function DraftCard({
           <button
             onClick={() => onChange({ ...draft, kept: false })}
             className={`rounded-xl px-3 py-1.5 text-xs font-black ${
-              !draft.kept ? "bg-red-500 text-white" : "border border-gray-700 text-gray-500"
+              !draft.kept
+                ? "bg-red-500 text-white"
+                : "border border-gray-700 text-gray-500"
             }`}
           >
             ✗ Ignorer
@@ -424,12 +633,27 @@ function DraftCard({
         ))}
       </div>
 
-      <input
-        value={draft.explanation}
-        onChange={(e) => onChange({ ...draft, explanation: e.target.value })}
-        placeholder="Explication..."
-        className="mt-3 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-xs text-gray-300 outline-none placeholder:text-gray-600 focus:border-amber-500"
-      />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <select
+          value={draft.period}
+          onChange={(e) => onChange({ ...draft, period: e.target.value })}
+          className="rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-xs text-white outline-none focus:border-amber-500"
+        >
+          <option value="">Période (optionnel)</option>
+          {PERIODS.map((p) => (
+            <option key={p} value={p}>
+              {p}
+            </option>
+          ))}
+        </select>
+
+        <input
+          value={draft.explanation}
+          onChange={(e) => onChange({ ...draft, explanation: e.target.value })}
+          placeholder="Explication..."
+          className="rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-xs text-gray-300 outline-none placeholder:text-gray-600 focus:border-amber-500"
+        />
+      </div>
     </div>
   );
 }
@@ -453,6 +677,15 @@ export default function SchoolQuestionsPage() {
   const [form, setForm] = useState({ ...BLANK_FORM });
   const [saving, setSaving] = useState(false);
 
+  // My questions filters
+  const [myFilterType, setMyFilterType] = useState("");
+  const [myFilterPeriod, setMyFilterPeriod] = useState("");
+
+  // Propose
+  const [proposeStatuses, setProposeStatuses] = useState<
+    Record<string, ProposeState>
+  >({});
+
   // PDF
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
@@ -461,9 +694,12 @@ export default function SchoolQuestionsPage() {
 
   // Public library
   const [publicQuestions, setPublicQuestions] = useState<PublicQuestion[]>([]);
-  const [publicFilter, setPublicFilter] = useState("");
+  const [pubFilterType, setPubFilterType] = useState("");
+  const [pubFilterPeriod, setPubFilterPeriod] = useState("");
+  const [pubFilterText, setPubFilterText] = useState("");
   const [addingId, setAddingId] = useState<string | null>(null);
 
+  // Teacher access check
   useEffect(() => {
     async function checkAccess() {
       const { data } = await supabase.rpc("is_current_user_school_teacher");
@@ -509,7 +745,8 @@ export default function SchoolQuestionsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isTeacher]);
 
-  // Form
+  // ── Form helpers ──
+
   function resetForm() {
     setForm({ ...BLANK_FORM });
     setEditingId(null);
@@ -527,6 +764,7 @@ export default function SchoolQuestionsPage() {
       answer_index: q.answer_index,
       explanation: q.explanation ?? "",
       subject: q.subject ?? "",
+      period: q.period ?? "",
     });
     setEditingId(q.id);
     setShowForm(true);
@@ -540,7 +778,10 @@ export default function SchoolQuestionsPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) { setSaving(false); return; }
+    if (!user) {
+      setSaving(false);
+      return;
+    }
 
     const options =
       form.type === "truefalse"
@@ -561,6 +802,7 @@ export default function SchoolQuestionsPage() {
       answer_index: Math.min(form.answer_index, options.length - 1),
       explanation: form.explanation.trim() || null,
       subject: form.subject.trim() || null,
+      period: form.period || null,
     };
 
     if (editingId) {
@@ -593,7 +835,43 @@ export default function SchoolQuestionsPage() {
     );
   }
 
-  // PDF
+  // ── Propose ──
+
+  async function proposeQuestion(id: string, force = false) {
+    setProposeStatuses((prev) => ({ ...prev, [id]: { kind: "loading" } }));
+
+    try {
+      const res = await fetch("/api/propose-question", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ questionId: id, forcePropose: force }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        setProposeStatuses((prev) => ({ ...prev, [id]: { kind: "idle" } }));
+        alert(json.error ?? "Erreur lors de la proposition.");
+        return;
+      }
+
+      if (json.duplicate) {
+        setProposeStatuses((prev) => ({
+          ...prev,
+          [id]: { kind: "duplicate", similarText: json.similar },
+        }));
+        return;
+      }
+
+      setProposeStatuses((prev) => ({ ...prev, [id]: { kind: "proposed" } }));
+    } catch {
+      setProposeStatuses((prev) => ({ ...prev, [id]: { kind: "idle" } }));
+      alert("Erreur réseau.");
+    }
+  }
+
+  // ── PDF ──
+
   async function handlePdfUpload(file: File) {
     setPdfError(null);
     setPdfLoading(true);
@@ -618,18 +896,17 @@ export default function SchoolQuestionsPage() {
           return;
         }
 
-        setDrafts(
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (json.questions as any[]).map((q, i) => ({
-            key: i,
-            type: q.type ?? "mcq",
-            question: q.question ?? "",
-            options: Array.isArray(q.options) ? q.options : [],
-            answer_index: q.answer_index ?? 0,
-            explanation: q.explanation ?? "",
-            kept: true,
-          }))
-        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        setDrafts((json.questions as any[]).map((q, i) => ({
+          key: i,
+          type: q.type ?? "mcq",
+          question: q.question ?? "",
+          options: Array.isArray(q.options) ? q.options : [],
+          answer_index: q.answer_index ?? 0,
+          explanation: q.explanation ?? "",
+          period: q.period ?? "",
+          kept: true,
+        })));
       } catch {
         setPdfError("Erreur réseau, réessaie.");
       }
@@ -649,7 +926,10 @@ export default function SchoolQuestionsPage() {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) { setSavingDrafts(false); return; }
+    if (!user) {
+      setSavingDrafts(false);
+      return;
+    }
 
     await supabase.from("teacher_questions").insert(
       toSave.map((d) => ({
@@ -659,6 +939,7 @@ export default function SchoolQuestionsPage() {
         options: d.options,
         answer_index: d.answer_index,
         explanation: d.explanation || null,
+        period: d.period || null,
         subject: null,
       }))
     );
@@ -669,14 +950,18 @@ export default function SchoolQuestionsPage() {
     setSavingDrafts(false);
   }
 
-  // Public → my
+  // ── Public → my ──
+
   async function addPublicQuestion(q: PublicQuestion) {
     setAddingId(q.id);
 
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) { setAddingId(null); return; }
+    if (!user) {
+      setAddingId(null);
+      return;
+    }
 
     await supabase.from("teacher_questions").insert({
       teacher_id: user.id,
@@ -685,21 +970,35 @@ export default function SchoolQuestionsPage() {
       options: q.options,
       answer_index: q.answer_index,
       explanation: q.explanation ?? null,
-      subject: q.period ?? null,
+      period: q.period ?? null,
+      subject: null,
     });
 
     await loadMyQuestions();
     setAddingId(null);
   }
 
-  const filteredPublic = publicQuestions.filter(
-    (q) =>
-      !publicFilter ||
-      q.question.toLowerCase().includes(publicFilter.toLowerCase()) ||
-      q.period?.toLowerCase().includes(publicFilter.toLowerCase())
-  );
+  // ── Filtered lists ──
 
-  // Guards
+  const filteredMyQuestions = myQuestions.filter((q) => {
+    if (myFilterType && q.type !== myFilterType) return false;
+    if (myFilterPeriod && q.period !== myFilterPeriod) return false;
+    return true;
+  });
+
+  const filteredPublic = publicQuestions.filter((q) => {
+    if (pubFilterType && q.type !== pubFilterType) return false;
+    if (pubFilterPeriod && q.period !== pubFilterPeriod) return false;
+    if (
+      pubFilterText &&
+      !q.question.toLowerCase().includes(pubFilterText.toLowerCase())
+    )
+      return false;
+    return true;
+  });
+
+  // ── Guards ──
+
   if (pageLoading) {
     return (
       <main className="min-h-screen bg-gray-950 p-8 text-white">
@@ -721,6 +1020,8 @@ export default function SchoolQuestionsPage() {
     );
   }
 
+  // ── Render ──
+
   return (
     <main className="min-h-screen bg-gray-950 px-4 py-8 text-white">
       <div className="mx-auto w-full max-w-4xl">
@@ -740,7 +1041,10 @@ export default function SchoolQuestionsPage() {
         <div className="mt-6 flex gap-1 border-b border-gray-800">
           {(
             [
-              { key: "my", label: `Mes questions (${myQuestions.length})` },
+              {
+                key: "my",
+                label: `Mes questions (${myQuestions.length})`,
+              },
               { key: "pdf", label: "Importer PDF" },
               { key: "public", label: "Bibliothèque HistoGuess" },
             ] as const
@@ -785,13 +1089,22 @@ export default function SchoolQuestionsPage() {
                 </button>
               )}
 
-              {myQuestions.length === 0 && !showForm ? (
+              <FilterBar
+                filterType={myFilterType}
+                setFilterType={setMyFilterType}
+                filterPeriod={myFilterPeriod}
+                setFilterPeriod={setMyFilterPeriod}
+              />
+
+              {filteredMyQuestions.length === 0 && !showForm ? (
                 <div className="rounded-2xl border border-dashed border-gray-800 p-10 text-center text-gray-500">
-                  Aucune question. Crée-en une ou importe depuis un PDF.
+                  {myQuestions.length === 0
+                    ? "Aucune question. Crée-en une ou importe depuis un PDF."
+                    : "Aucun résultat pour ces filtres."}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {myQuestions.map((q) =>
+                  {filteredMyQuestions.map((q) =>
                     editingId === q.id && showForm ? null : (
                       <QuestionCard
                         key={q.id}
@@ -799,6 +1112,11 @@ export default function SchoolQuestionsPage() {
                         onEdit={() => startEdit(q)}
                         onDelete={() => deleteQuestion(q.id)}
                         onTogglePublic={() => togglePublic(q)}
+                        proposeState={
+                          proposeStatuses[q.id] ?? { kind: "idle" }
+                        }
+                        onPropose={() => proposeQuestion(q.id)}
+                        onForcePropose={() => proposeQuestion(q.id, true)}
                       />
                     )
                   )}
@@ -864,19 +1182,21 @@ export default function SchoolQuestionsPage() {
           {/* ── Public library ── */}
           {tab === "public" && (
             <div>
-              <input
-                type="text"
-                value={publicFilter}
-                onChange={(e) => setPublicFilter(e.target.value)}
-                placeholder="Filtrer par question ou période..."
-                className="w-full rounded-2xl border border-gray-700 bg-gray-900 px-4 py-3 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+              <FilterBar
+                filterType={pubFilterType}
+                setFilterType={setPubFilterType}
+                filterPeriod={pubFilterPeriod}
+                setFilterPeriod={setPubFilterPeriod}
+                filterText={pubFilterText}
+                setFilterText={setPubFilterText}
+                showText
               />
 
-              <p className="mt-3 text-sm text-gray-500">
+              <p className="mb-4 text-sm text-gray-500">
                 {filteredPublic.length} question(s) approuvée(s) HistoGuess
               </p>
 
-              <div className="mt-4 space-y-2">
+              <div className="space-y-2">
                 {filteredPublic.map((q) => (
                   <div
                     key={q.id}
@@ -886,7 +1206,7 @@ export default function SchoolQuestionsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <TypeBadge type={q.type} />
                         {q.period && (
-                          <span className="text-xs text-gray-500">
+                          <span className="rounded-full bg-gray-800 px-2 py-0.5 text-xs text-gray-400">
                             {q.period}
                           </span>
                         )}
