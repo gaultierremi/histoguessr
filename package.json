@@ -10,6 +10,7 @@
     "upload:timeline-images": "node --env-file=.env.local scripts/upload-timeline-images.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.92.0",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.43.0",
     "@tailwindcss/postcss": "^4.2.4",

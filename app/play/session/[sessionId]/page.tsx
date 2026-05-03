@@ -198,7 +198,9 @@ export default function PlaySessionPage({
   }
 
   async function loadCurrentQuestion(questionId: string) {
-    const { data, error } = await supabase
+    let resolved: QuizQuestion | null = null;
+
+    const { data: qqData } = await supabase
       .from("quiz_questions")
       .select(
         "id, type, question, options, answer_index, explanation, difficulty, period"
@@ -206,13 +208,25 @@ export default function PlaySessionPage({
       .eq("id", questionId)
       .maybeSingle();
 
-    if (error || !data) {
+    if (qqData) {
+      resolved = qqData as QuizQuestion;
+    } else {
+      const { data: tqData } = await supabase
+        .from("teacher_questions")
+        .select("id, type, question, options, answer_index, explanation")
+        .eq("id", questionId)
+        .maybeSingle();
+
+      if (tqData) resolved = tqData as QuizQuestion;
+    }
+
+    if (!resolved) {
       setQuestion(null);
       setMessage("Impossible de charger la question.");
       return;
     }
 
-    setQuestion(data as QuizQuestion);
+    setQuestion(resolved);
     setMode(null);
     setDuoIndices(null);
     setCashInput("");

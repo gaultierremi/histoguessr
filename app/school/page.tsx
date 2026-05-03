@@ -68,13 +68,16 @@ export default function SchoolDashboardPage() {
             </p>
           </a>
 
-          <div className="rounded-3xl border border-gray-800 bg-gray-900 p-6 opacity-70">
+          <a
+            href="/school/questions"
+            className="rounded-3xl border border-gray-800 bg-gray-900 p-6 transition hover:border-amber-500/50 hover:bg-gray-800"
+          >
             <div className="text-4xl">📚</div>
             <h2 className="mt-4 text-xl font-black">Mes questions</h2>
             <p className="mt-2 text-sm text-gray-400">
-              Bientôt : voir, modifier et organiser tes questions.
+              Crée, importe depuis un PDF et gère tes questions de quiz.
             </p>
-          </div>
+          </a>
 
           <div className="rounded-3xl border border-gray-800 bg-gray-900 p-6 opacity-70">
             <div className="text-4xl">📄</div>
