@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase-browser";
 import {
   MODE_LABELS,
@@ -78,6 +78,7 @@ export default function PlaySessionPage({
   const [cashInput, setCashInput] = useState("");
 
   const [timeLeft, setTimeLeft] = useState(DEFAULT_QUESTION_DURATION);
+  const prevTimeLeftRef = useRef(DEFAULT_QUESTION_DURATION);
   const [phase, setPhase] = useState<Phase>("question");
   const [phaseLockedIndex, setPhaseLockedIndex] = useState<number | null>(null);
 
@@ -558,6 +559,7 @@ export default function PlaySessionPage({
   useEffect(() => {
     if (!session || session.status !== "playing") return;
     if (timeLeft > 0) return;
+    if (prevTimeLeftRef.current <= 0) return;
     if (phaseLockedIndex === session.current_question_index) return;
 
     setPhaseLockedIndex(session.current_question_index);
@@ -576,6 +578,10 @@ export default function PlaySessionPage({
     return () => clearTimeout(revealTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timeLeft, session?.current_question_index, session?.status]);
+
+  useEffect(() => {
+    prevTimeLeftRef.current = timeLeft;
+  }, [timeLeft]);
 
   useEffect(() => {
     const channel = supabase
