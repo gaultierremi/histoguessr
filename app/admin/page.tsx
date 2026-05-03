@@ -557,11 +557,23 @@ function AnachronismeValidator({ supabase }: { supabase: SupabaseClient }) {
 
 // ─── Quiz validator ───────────────────────────────────────────────────────────
 
+type QuizEditForm = {
+  question: string;
+  options: string[];
+  answer_index: number;
+  explanation: string;
+  period: string;
+  difficulty: string;
+};
+
 function QuizValidator({ supabase }: { supabase: SupabaseClient }) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<QuizEditForm | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const fetchReviewable = useCallback(async () => {
     setLoading(true);
@@ -597,6 +609,48 @@ function QuizValidator({ supabase }: { supabase: SupabaseClient }) {
     fetchReviewable();
   }
 
+  function startEdit(q: QuizQuestion) {
+    setRejectingId(null);
+    setEditingId(q.id);
+    setEditForm({
+      question: q.question,
+      options: [...q.options],
+      answer_index: q.answer_index,
+      explanation: q.explanation ?? "",
+      period: q.period ?? "",
+      difficulty: String(q.difficulty),
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditForm(null);
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm) return;
+    setSavingEdit(true);
+
+    const patch = {
+      question: editForm.question.trim(),
+      options: editForm.options.map((o) => o.trim()),
+      answer_index: editForm.answer_index,
+      explanation: editForm.explanation.trim() || null,
+      period: editForm.period.trim() || null,
+      difficulty: Number(editForm.difficulty) as 1 | 2 | 3,
+    };
+
+    await supabase.from("quiz_questions").update(patch).eq("id", id);
+
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, ...patch } : q))
+    );
+
+    setEditingId(null);
+    setEditForm(null);
+    setSavingEdit(false);
+  }
+
   if (loading) return (
     <div className="flex justify-center py-10">
       <div className="h-6 w-6 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
@@ -613,77 +667,199 @@ function QuizValidator({ supabase }: { supabase: SupabaseClient }) {
     <ul className="space-y-4">
       {questions.map((q) => (
         <li key={q.id} className="rounded-xl border border-gray-800 bg-gray-900 p-4">
-          {/* Header */}
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <StatusBadge status={q.status} />
-            <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-              {q.type === "mcq" ? "QCM" : "Vrai/Faux"}
-            </span>
-            <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
-              {"★".repeat(q.difficulty)}<span className="text-gray-700">{"★".repeat(3 - q.difficulty)}</span>
-            </span>
-            {q.period && (
-              <span className="text-xs text-gray-500">{q.period}</span>
-            )}
-          </div>
-
-          {/* Question text */}
-          <p className="font-medium text-white">{q.question}</p>
-
-          {/* Options */}
-          <ul className="mt-2 space-y-1">
-            {q.options.map((opt, i) => (
-              <li key={i} className={`flex items-center gap-1.5 text-sm ${
-                i === q.answer_index ? "text-green-400" : "text-gray-500"
-              }`}>
-                <span className="font-mono text-xs">{String.fromCharCode(65 + i)}.</span>
-                {opt}
-                {i === q.answer_index && <span className="text-green-600 text-xs">✓</span>}
-              </li>
-            ))}
-          </ul>
-
-          {/* Explanation */}
-          {q.explanation && (
-            <p className="mt-2 text-xs text-gray-500 italic">
-              <span className="not-italic font-medium text-gray-400">Explication : </span>
-              {q.explanation}
-            </p>
-          )}
-
-          {/* Actions */}
-          {rejectingId === q.id ? (
-            <div className="mt-4 space-y-2">
-              <textarea autoFocus value={rejectReason}
-                onChange={(e) => setRejectReason(e.target.value)}
-                placeholder="Motif du refus…" rows={2}
-                className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none" />
-              <div className="flex gap-2">
-                <button onClick={() => handleReject(q.id)} disabled={!rejectReason.trim()}
-                  className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40">
-                  Confirmer le refus
+          {editingId === q.id && editForm ? (
+            /* ── Edit mode ── */
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-bold text-amber-400">Modifier la question</p>
+                <button onClick={cancelEdit} className="text-xs text-gray-500 hover:text-white">
+                  Annuler
                 </button>
-                <button onClick={() => setRejectingId(null)}
-                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-400">Question</label>
+                <textarea
+                  autoFocus
+                  value={editForm.question}
+                  onChange={(e) => setEditForm((f) => f ? { ...f, question: e.target.value } : f)}
+                  rows={2}
+                  className="w-full resize-none rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-400">
+                  Options — clique sur le cercle pour marquer la bonne réponse
+                </label>
+                <div className="space-y-1.5">
+                  {editForm.options.map((opt, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEditForm((f) => f ? { ...f, answer_index: i } : f)}
+                        className={`h-5 w-5 shrink-0 rounded-full border-2 transition ${
+                          editForm.answer_index === i
+                            ? "border-green-500 bg-green-500"
+                            : "border-gray-600 hover:border-gray-400"
+                        }`}
+                      />
+                      {q.type === "truefalse" ? (
+                        <span className={`text-sm ${editForm.answer_index === i ? "text-green-400" : "text-white"}`}>
+                          {opt}
+                        </span>
+                      ) : (
+                        <input
+                          value={opt}
+                          onChange={(e) => {
+                            const next = [...editForm.options];
+                            next[i] = e.target.value;
+                            setEditForm((f) => f ? { ...f, options: next } : f);
+                          }}
+                          className={`w-full rounded-lg border px-3 py-1.5 text-sm text-white outline-none focus:border-amber-500 ${
+                            editForm.answer_index === i
+                              ? "border-green-500/50 bg-green-500/10"
+                              : "border-gray-700 bg-gray-950"
+                          }`}
+                        />
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-400">Explication</label>
+                  <input
+                    value={editForm.explanation}
+                    onChange={(e) => setEditForm((f) => f ? { ...f, explanation: e.target.value } : f)}
+                    placeholder="Optionnel…"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-gray-400">Période</label>
+                  <input
+                    value={editForm.period}
+                    onChange={(e) => setEditForm((f) => f ? { ...f, period: e.target.value } : f)}
+                    placeholder="ex : Moyen Âge…"
+                    className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-gray-400">Difficulté</label>
+                <select
+                  value={editForm.difficulty}
+                  onChange={(e) => setEditForm((f) => f ? { ...f, difficulty: e.target.value } : f)}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="1">1 — Facile</option>
+                  <option value="2">2 — Moyen</option>
+                  <option value="3">3 — Expert</option>
+                </select>
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => saveEdit(q.id)}
+                  disabled={savingEdit || !editForm.question.trim()}
+                  className="flex-1 rounded-lg bg-amber-500 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-amber-400 disabled:opacity-40"
+                >
+                  {savingEdit ? "Sauvegarde…" : "💾 Sauvegarder"}
+                </button>
+                <button
+                  onClick={cancelEdit}
+                  className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white"
+                >
                   Annuler
                 </button>
               </div>
             </div>
           ) : (
-            <div className="mt-4 flex gap-2">
-              <button onClick={() => handleApprove(q.id)}
-                className="flex-1 rounded-lg bg-green-600/20 py-2 text-sm font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30">
-                ✓ Valider
-              </button>
-              <button onClick={() => handleToCheck(q.id)} disabled={q.status === "to_check"}
-                className="flex-1 rounded-lg bg-blue-600/10 py-2 text-sm font-semibold text-blue-400 ring-1 ring-blue-500/20 transition-colors hover:bg-blue-600/20 disabled:cursor-default disabled:opacity-40">
-                ⚠ À vérifier
-              </button>
-              <button onClick={() => { setRejectingId(q.id); setRejectReason(""); }}
-                className="flex-1 rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20">
-                ✕ Refuser
-              </button>
-            </div>
+            /* ── Read mode ── */
+            <>
+              {/* Header */}
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <StatusBadge status={q.status} />
+                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+                  {q.type === "mcq" ? "QCM" : "Vrai/Faux"}
+                </span>
+                <span className="rounded-full border border-gray-700 px-2 py-0.5 text-xs text-gray-400">
+                  {"★".repeat(q.difficulty)}<span className="text-gray-700">{"★".repeat(3 - q.difficulty)}</span>
+                </span>
+                {q.period && (
+                  <span className="text-xs text-gray-500">{q.period}</span>
+                )}
+                <button
+                  onClick={() => startEdit(q)}
+                  className="ml-auto rounded-lg border border-gray-700 px-2.5 py-1 text-xs font-medium text-gray-400 transition-colors hover:border-amber-500/40 hover:text-amber-300"
+                >
+                  ✏️ Modifier
+                </button>
+              </div>
+
+              {/* Question text */}
+              <p className="font-medium text-white">{q.question}</p>
+
+              {/* Options */}
+              <ul className="mt-2 space-y-1">
+                {q.options.map((opt, i) => (
+                  <li key={i} className={`flex items-center gap-1.5 text-sm ${
+                    i === q.answer_index ? "text-green-400" : "text-gray-500"
+                  }`}>
+                    <span className="font-mono text-xs">{String.fromCharCode(65 + i)}.</span>
+                    {opt}
+                    {i === q.answer_index && <span className="text-xs text-green-600">✓</span>}
+                  </li>
+                ))}
+              </ul>
+
+              {/* Explanation */}
+              {q.explanation && (
+                <p className="mt-2 text-xs italic text-gray-500">
+                  <span className="not-italic font-medium text-gray-400">Explication : </span>
+                  {q.explanation}
+                </p>
+              )}
+
+              {/* Actions */}
+              {rejectingId === q.id ? (
+                <div className="mt-4 space-y-2">
+                  <textarea autoFocus value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    placeholder="Motif du refus…" rows={2}
+                    className="w-full resize-none rounded-lg border border-red-900/50 bg-gray-950 px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-red-500 focus:outline-none" />
+                  <div className="flex gap-2">
+                    <button onClick={() => handleReject(q.id)} disabled={!rejectReason.trim()}
+                      className="flex-1 rounded-lg bg-red-600 py-2 text-sm font-semibold text-white transition-colors hover:bg-red-500 disabled:opacity-40">
+                      Confirmer le refus
+                    </button>
+                    <button onClick={() => setRejectingId(null)}
+                      className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white">
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 flex gap-2">
+                  <button onClick={() => handleApprove(q.id)}
+                    className="flex-1 rounded-lg bg-green-600/20 py-2 text-sm font-semibold text-green-400 ring-1 ring-green-500/30 transition-colors hover:bg-green-600/30">
+                    ✓ Valider
+                  </button>
+                  <button onClick={() => handleToCheck(q.id)} disabled={q.status === "to_check"}
+                    className="flex-1 rounded-lg bg-blue-600/10 py-2 text-sm font-semibold text-blue-400 ring-1 ring-blue-500/20 transition-colors hover:bg-blue-600/20 disabled:cursor-default disabled:opacity-40">
+                    ⚠ À vérifier
+                  </button>
+                  <button onClick={() => { setRejectingId(q.id); setRejectReason(""); }}
+                    className="flex-1 rounded-lg bg-red-600/10 py-2 text-sm font-semibold text-red-400 ring-1 ring-red-500/20 transition-colors hover:bg-red-600/20">
+                    ✕ Refuser
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </li>
       ))}
