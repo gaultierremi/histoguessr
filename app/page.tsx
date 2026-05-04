@@ -384,11 +384,12 @@ export default async function Home() {
                 </Link>
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
-                  <LockedModeCard
-                    emoji="🎮"
-                    label="Partie rapide"
-                    desc="Matchmaking fun"
-                    tag="bientôt"
+                  <SmallModeCard
+                    href="/train"
+                    emoji="🧠"
+                    label="Entraînement"
+                    desc="Adaptatif & IA"
+                    tag="NEW"
                   />
                   <LockedModeCard
                     emoji="🏆"

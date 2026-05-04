@@ -154,6 +154,43 @@ export async function getAdaptiveQuestions(
   return combined.slice(0, count);
 }
 
+export type ConceptDelta = {
+  concept_id: string;
+  name: string;
+  score_before: number;
+  score_after: number;
+  delta: number;
+};
+
+export async function getConceptProgressDelta(
+  userId: string,
+  conceptIds: string[],
+  beforeScores: Record<string, number>
+): Promise<ConceptDelta[]> {
+  if (conceptIds.length === 0) return [];
+  const db = getDb();
+
+  const { data } = await db
+    .from("user_concept_mastery")
+    .select("concept_id, mastery_score, concept:concepts(name)")
+    .eq("user_id", userId)
+    .in("concept_id", conceptIds);
+
+  return (
+    (
+      data as
+        | { concept_id: string; mastery_score: number; concept: { name: string } }[]
+        | null
+    ) ?? []
+  ).map((row) => ({
+    concept_id: row.concept_id,
+    name: row.concept.name,
+    score_before: beforeScores[row.concept_id] ?? 0,
+    score_after: row.mastery_score,
+    delta: row.mastery_score - (beforeScores[row.concept_id] ?? 0),
+  }));
+}
+
 export async function generateVariantQuestion(
   originalQuestion: QuizQuestion,
   conceptName: string,
