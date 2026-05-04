@@ -977,6 +977,20 @@ export default function TimelineGame({
     setValidated(true);
     setHoverYear(null);
     setCursorRatio(null);
+
+    // Fire and forget — mastery tracking
+    const score = calculateScore(guessedYear, event.year);
+    fetch("/api/record-timeline-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventId: event.id,
+        correct: score >= 150,
+        year: event.year,
+        guessedYear: guessedYear,
+        category: event.category ?? "",
+      }),
+    }).catch(() => {});
   }
 
   function handleNext() {

@@ -119,8 +119,20 @@ export default function GameCard({ questions }: { questions: Question[] }) {
 
   function handleValidate() {
     if (!input.trim()) return;
-    setIsCorrect(isCorrectAnswer(input, question.answer));
+    const correct = isCorrectAnswer(input, question.answer);
+    setIsCorrect(correct);
     setRevealed(true);
+
+    // Fire and forget — mastery tracking
+    fetch("/api/record-anachronism-answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        questionId: question.id,
+        correct,
+        period: question.period ?? "",
+      }),
+    }).catch(() => {});
   }
 
   function handleNext() {

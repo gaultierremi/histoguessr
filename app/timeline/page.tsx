@@ -1,5 +1,9 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { getTimelineEvents } from "@/lib/timeline";
+import { getAdaptiveTimelineEvents } from "@/lib/adaptive";
+import { getUserMastery } from "@/lib/concepts";
+import { createClient } from "@/lib/supabase-server";
 import TimelineGame from "@/components/TimelineGame";
 import TimelineSortGame from "@/components/TimelineSortGame";
 import Header from "@/components/Header";
@@ -52,7 +56,7 @@ function ArrowIcon() {
   );
 }
 
-function ModeSelect() {
+function ModeSelect({ showAdaptive = false }: { showAdaptive?: boolean }) {
   return (
     <main className="flex min-h-screen flex-col bg-gray-950">
       <Header />
@@ -69,6 +73,25 @@ function ModeSelect() {
         </div>
 
         <div className="flex w-full flex-col gap-3">
+          {showAdaptive && (
+            <Link
+              href="/timeline?mode=adaptive"
+              className="group flex flex-col gap-2 rounded-2xl border border-purple-500/40 bg-purple-500/10 p-5 transition-all hover:border-purple-400/60 hover:bg-purple-500/15"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg font-bold text-white">
+                  🎯 Mode adaptatif
+                </span>
+                <span className="rounded-full bg-purple-500/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-purple-300">
+                  IA
+                </span>
+              </div>
+              <p className="text-sm text-gray-500">
+                Sélection personnalisée selon tes lacunes. Les événements liés à tes concepts faibles sont prioritaires.
+              </p>
+            </Link>
+          )}
+
           <Link
             href="/timeline?mode=placement"
             className="group flex flex-col gap-2 rounded-2xl border border-gray-800 bg-gray-900 p-5 transition-all hover:border-amber-700/60"
@@ -163,8 +186,48 @@ export default async function TimelinePage({
 }) {
   const { mode, difficulty: rawDiff } = searchParams;
 
+  // Adaptive mode — requires auth
+  if (mode === "adaptive") {
+    const supabase = createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) redirect("/");
+
+    let events: Awaited<ReturnType<typeof getAdaptiveTimelineEvents>> = [];
+    try {
+      events = await getAdaptiveTimelineEvents(user.id, 8);
+    } catch {
+      // Tables not yet created
+    }
+
+    if (events.length === 0) redirect("/timeline");
+
+    return (
+      <main className="flex min-h-screen flex-col bg-gray-950">
+        <Header />
+        <div className="flex-1 px-4">
+          <TimelineGame events={events} difficulty={1} />
+        </div>
+      </main>
+    );
+  }
+
   if (!mode || !["placement", "sort"].includes(mode)) {
-    return <ModeSelect />;
+    let showAdaptive = false;
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        const mastery = await getUserMastery(user.id);
+        showAdaptive = mastery.length > 0;
+      }
+    } catch {
+      // Tables not yet created — button stays hidden
+    }
+    return <ModeSelect showAdaptive={showAdaptive} />;
   }
 
   const difficulty = Number(rawDiff);
