@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { createClient } from "@/lib/supabase-server";
 import Header from "@/components/Header";
 import Avatar, { getLevelInfo } from "@/components/Avatar";
 import AuthButton from "@/components/AuthButton";
 import DailyChallengeTicker from "@/components/DailyChallengeTicker";
+import DailyStudyCard from "@/components/DailyStudyCard";
 import { getOrCreateProfile } from "@/lib/profile";
 import { getQuizLeaderboard } from "@/lib/scores";
 import type { UserStats } from "@/lib/profile";
@@ -265,6 +267,11 @@ export default async function Home() {
         </aside>
 
         <section className="flex flex-1 flex-col gap-5">
+          {user && (
+            <Suspense fallback={null}>
+              <DailyStudyCard userId={user.id} />
+            </Suspense>
+          )}
           <div className="grid gap-6 lg:grid-cols-2">
             <section className="group relative overflow-hidden rounded-[2rem] border border-blue-500/30 bg-gradient-to-br from-blue-500/15 via-gray-900 to-gray-950 p-6 shadow-2xl shadow-black/20 transition-all hover:-translate-y-1 hover:border-blue-400 hover:shadow-blue-500/10">
               <div className="absolute -right-14 -top-14 h-44 w-44 rounded-full bg-blue-400/10 blur-3xl transition group-hover:bg-blue-400/20" />

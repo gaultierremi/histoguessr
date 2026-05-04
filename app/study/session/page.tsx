@@ -103,7 +103,7 @@ export default function StudySessionPage() {
           .select("question_id, concept_id, concept:concepts(id,name)")
           .in("question_id", questionIds),
         supabase
-          .from("concept_mastery")
+          .from("user_concept_mastery")
           .select(
             "concept_id, mastery_score, correct, attempts, next_review, concept:concepts(id,name)"
           )
