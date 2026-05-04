@@ -358,6 +358,21 @@ export default function QuizCard({
     const newAnswers = [...answers, newRecord];
     setAnswers(newAnswers);
 
+    // Fire and forget - no await, no blocking
+    if (typeof window !== "undefined") {
+      fetch("/api/record-quiz-answer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionId: question.id,
+          questionType: "quiz",
+          correct: isCorrect,
+          period: question.period ?? "",
+          question: question.question,
+        }),
+      }).catch(() => {});
+    }
+
     if (step < total - 1) {
       setStep((currentStep) => currentStep + 1);
       resetQuestionState();
