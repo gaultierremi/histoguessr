@@ -385,10 +385,10 @@ export default async function Home() {
 
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <SmallModeCard
-                    href="/train"
-                    emoji="🧠"
-                    label="Entraînement"
-                    desc="Adaptatif & IA"
+                    href="/study"
+                    emoji="📖"
+                    label="Étudier"
+                    desc="Créer mon quiz"
                     tag="NEW"
                   />
                   <LockedModeCard
