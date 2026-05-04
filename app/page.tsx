@@ -388,7 +388,7 @@ export default async function Home() {
                     href="/study"
                     emoji="📖"
                     label="Étudier"
-                    desc="Créer mon quiz"
+                    desc="10 matières · IA"
                     tag="NEW"
                   />
                   <LockedModeCard

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Header from "@/components/Header";
 import TrainingCard from "@/components/TrainingCard";
@@ -14,6 +13,9 @@ type SessionData = {
   source: string;
   mode: string;
   count: number;
+  subject?: string;
+  difficulty?: number;
+  topic?: string;
 };
 
 type Recommendation = {
@@ -34,8 +36,6 @@ const REC_ICONS = {
 } as const;
 
 export default function StudySessionPage() {
-  const router = useRouter();
-
   const [session, setSession] = useState<SessionData | null>(null);
   const [questionConcepts, setQuestionConcepts] = useState<
     Record<string, { id: string; name: string }[]>
@@ -72,6 +72,20 @@ export default function StudySessionPage() {
     }
 
     setSession(parsed);
+
+    // Fire-and-forget: record session in study_sessions table
+    fetch("/api/study-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        subject: parsed.subject ?? "autre",
+        source: parsed.source ?? "library",
+        questionCount: parsed.questions.length,
+        mode: parsed.mode ?? "normal",
+        difficulty: parsed.difficulty ?? 1,
+        topic: parsed.topic,
+      }),
+    }).catch(() => {});
 
     async function loadEnrichment(questions: QuizQuestion[]) {
       const supabase = createClient();
