@@ -19,6 +19,7 @@ type TeacherQuestion = {
   period: string | null;
   is_public: boolean;
   created_at: string;
+  use_count?: number;
 };
 
 type PublicQuestion = {
@@ -48,6 +49,12 @@ type ProposeState =
   | { kind: "loading" }
   | { kind: "proposed" }
   | { kind: "duplicate"; similarText: string };
+
+type PdfStats = {
+  pageCount: number | null;
+  questionCount: number;
+  fromCache: boolean;
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -113,7 +120,7 @@ function FilterBar({
   showText?: boolean;
 }) {
   return (
-    <div className="mb-5 flex flex-wrap gap-2">
+    <div className="flex flex-wrap gap-2">
       {showText && setFilterText !== undefined && (
         <input
           type="text"
@@ -149,6 +156,49 @@ function FilterBar({
 }
 
 // ---------------------------------------------------------------------------
+// QuestionPreview
+// ---------------------------------------------------------------------------
+
+function QuestionPreview({ form }: { form: typeof BLANK_FORM }) {
+  const isTrueFalse = form.type === "truefalse";
+  const options = isTrueFalse ? ["Vrai", "Faux"] : form.options;
+
+  return (
+    <div className="rounded-2xl border border-gray-700 bg-gray-950 p-4">
+      <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-gray-600">
+        Aperçu élève
+      </p>
+      <p className="min-h-[2rem] font-bold leading-snug text-white">
+        {form.question ? (
+          form.question
+        ) : (
+          <span className="italic text-gray-600">La question apparaîtra ici…</span>
+        )}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {options.map((opt, i) => (
+          <div
+            key={i}
+            className={`rounded-xl px-3 py-2.5 text-center text-sm font-bold transition ${
+              i === form.answer_index
+                ? "border border-green-500/40 bg-green-500/10 text-green-300"
+                : "border border-gray-700 bg-gray-900 text-gray-400"
+            }`}
+          >
+            {opt || (!isTrueFalse ? `Option ${String.fromCharCode(65 + i)}` : "")}
+          </div>
+        ))}
+      </div>
+      {form.explanation && (
+        <p className="mt-3 rounded-xl bg-gray-900 px-3 py-2 text-xs italic text-gray-500">
+          💡 {form.explanation}
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // QuestionForm
 // ---------------------------------------------------------------------------
 
@@ -159,6 +209,8 @@ function QuestionForm({
   onCancel,
   saving,
   isEdit,
+  generatingExpl,
+  onGenerateExpl,
 }: {
   form: typeof BLANK_FORM;
   setForm: (f: typeof BLANK_FORM) => void;
@@ -166,9 +218,16 @@ function QuestionForm({
   onCancel: () => void;
   saving: boolean;
   isEdit: boolean;
+  generatingExpl: boolean;
+  onGenerateExpl: () => void;
 }) {
   const isTrueFalse = form.type === "truefalse";
   const displayOptions = isTrueFalse ? ["Vrai", "Faux"] : form.options;
+
+  const isValid =
+    form.question.trim().length > 0 &&
+    (form.type === "truefalse" ||
+      form.options.filter((o) => o.trim()).length >= 2);
 
   return (
     <div className="mb-6 rounded-3xl border border-amber-500/30 bg-gray-900 p-5">
@@ -176,145 +235,175 @@ function QuestionForm({
         {isEdit ? "Modifier la question" : "Nouvelle question"}
       </h2>
 
-      {/* Row 1: type + period */}
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-            Type
-          </label>
-          <select
-            value={form.type}
-            onChange={(e) =>
-              setForm({
-                ...form,
-                type: e.target.value as "mcq" | "truefalse",
-                answer_index: 0,
-              })
-            }
-            className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
-          >
-            <option value="mcq">QCM — Carré (4 options)</option>
-            <option value="truefalse">Vrai / Faux — Duo (2 options)</option>
-          </select>
-        </div>
+      <div className="mt-4 grid gap-6 lg:grid-cols-[1fr_260px]">
+        {/* Left: form fields */}
+        <div className="space-y-4">
+          {/* Row 1: type + period */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+                Type
+              </label>
+              <select
+                value={form.type}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    type: e.target.value as "mcq" | "truefalse",
+                    answer_index: 0,
+                  })
+                }
+                className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
+              >
+                <option value="mcq">QCM — Carré (4 options)</option>
+                <option value="truefalse">Vrai / Faux — Duo (2 options)</option>
+              </select>
+            </div>
 
-        <div>
-          <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-            Période historique
-          </label>
-          <select
-            value={form.period}
-            onChange={(e) => setForm({ ...form, period: e.target.value })}
-            className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
-          >
-            <option value="">Sélectionner une période</option>
-            {PERIODS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+            <div>
+              <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+                Période historique
+              </label>
+              <select
+                value={form.period}
+                onChange={(e) => setForm({ ...form, period: e.target.value })}
+                className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none focus:border-amber-500"
+              >
+                <option value="">Sélectionner une période</option>
+                {PERIODS.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-      {/* Row 2: subject */}
-      <div className="mt-4">
-        <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-          Matière (optionnel)
-        </label>
-        <input
-          value={form.subject}
-          onChange={(e) => setForm({ ...form, subject: e.target.value })}
-          placeholder="Ex : Histoire, SVT, Géographie..."
-          className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
-        />
-      </div>
+          {/* Subject */}
+          <div>
+            <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+              Matière (optionnel)
+            </label>
+            <input
+              value={form.subject}
+              onChange={(e) => setForm({ ...form, subject: e.target.value })}
+              placeholder="Ex : Histoire, SVT, Géographie..."
+              className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+            />
+          </div>
 
-      {/* Question text */}
-      <div className="mt-4">
-        <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-          Question
-        </label>
-        <textarea
-          value={form.question}
-          onChange={(e) => setForm({ ...form, question: e.target.value })}
-          rows={2}
-          placeholder="Énonce ta question..."
-          className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
-        />
-      </div>
+          {/* Question text */}
+          <div>
+            <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+              Question
+            </label>
+            <textarea
+              value={form.question}
+              onChange={(e) => setForm({ ...form, question: e.target.value })}
+              rows={2}
+              placeholder="Énonce ta question..."
+              className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+            />
+          </div>
 
-      {/* Options */}
-      <div className="mt-4">
-        <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-          {isTrueFalse
-            ? "Réponse correcte"
-            : "Options — clique sur le cercle pour marquer la bonne réponse"}
-        </label>
-        <div
-          className={`mt-2 grid gap-2 ${
-            isTrueFalse ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"
-          }`}
-        >
-          {displayOptions.map((opt, i) => (
-            <div key={i} className="flex items-center gap-2">
+          {/* Options */}
+          <div>
+            <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+              {isTrueFalse
+                ? "Réponse correcte"
+                : "Options — clique sur le cercle pour marquer la bonne réponse"}
+            </label>
+            <div
+              className={`mt-2 grid gap-2 ${
+                isTrueFalse ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-2"
+              }`}
+            >
+              {displayOptions.map((opt, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, answer_index: i })}
+                    className={`shrink-0 h-6 w-6 rounded-full border-2 transition ${
+                      form.answer_index === i
+                        ? "border-green-500 bg-green-500"
+                        : "border-gray-600 hover:border-gray-400"
+                    }`}
+                    aria-label={`Marquer option ${i + 1} comme correcte`}
+                  />
+                  {isTrueFalse ? (
+                    <span
+                      className={`font-bold ${
+                        form.answer_index === i ? "text-green-300" : "text-white"
+                      }`}
+                    >
+                      {opt}
+                    </span>
+                  ) : (
+                    <input
+                      value={form.options[i] ?? ""}
+                      onChange={(e) => {
+                        const next = [...form.options];
+                        next[i] = e.target.value;
+                        setForm({ ...form, options: next });
+                      }}
+                      placeholder={`Option ${String.fromCharCode(65 + i)}`}
+                      className={`w-full rounded-xl border px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-amber-500 ${
+                        form.answer_index === i
+                          ? "border-green-500/50 bg-green-500/10"
+                          : "border-gray-700 bg-gray-950"
+                      }`}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Explanation + AI button */}
+          <div>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-black uppercase tracking-widest text-gray-500">
+                Explication (optionnel)
+              </label>
               <button
                 type="button"
-                onClick={() => setForm({ ...form, answer_index: i })}
-                className={`shrink-0 h-6 w-6 rounded-full border-2 transition ${
-                  form.answer_index === i
-                    ? "border-green-500 bg-green-500"
-                    : "border-gray-600 hover:border-gray-400"
-                }`}
-                aria-label={`Marquer option ${i + 1} comme correcte`}
-              />
-              {isTrueFalse ? (
-                <span
-                  className={`font-bold ${
-                    form.answer_index === i ? "text-green-300" : "text-white"
-                  }`}
-                >
-                  {opt}
-                </span>
-              ) : (
-                <input
-                  value={form.options[i] ?? ""}
-                  onChange={(e) => {
-                    const next = [...form.options];
-                    next[i] = e.target.value;
-                    setForm({ ...form, options: next });
-                  }}
-                  placeholder={`Option ${String.fromCharCode(65 + i)}`}
-                  className={`w-full rounded-xl border px-3 py-2 text-sm text-white outline-none placeholder:text-gray-600 focus:border-amber-500 ${
-                    form.answer_index === i
-                      ? "border-green-500/50 bg-green-500/10"
-                      : "border-gray-700 bg-gray-950"
-                  }`}
-                />
-              )}
+                onClick={onGenerateExpl}
+                disabled={generatingExpl || !form.question.trim()}
+                className="rounded-lg bg-purple-500/20 px-3 py-1 text-xs font-black text-purple-300 transition hover:bg-purple-500/30 disabled:opacity-40"
+              >
+                {generatingExpl ? "Génération…" : "✨ Générer via IA"}
+              </button>
             </div>
-          ))}
+            <input
+              value={form.explanation}
+              onChange={(e) => setForm({ ...form, explanation: e.target.value })}
+              placeholder="Explication affichée après la réponse..."
+              className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
+            />
+          </div>
+        </div>
+
+        {/* Right: preview (desktop) */}
+        <div className="hidden lg:block">
+          <QuestionPreview form={form} />
         </div>
       </div>
 
-      {/* Explanation */}
-      <div className="mt-4">
-        <label className="text-xs font-black uppercase tracking-widest text-gray-500">
-          Explication (optionnel)
-        </label>
-        <input
-          value={form.explanation}
-          onChange={(e) => setForm({ ...form, explanation: e.target.value })}
-          placeholder="Explication affichée après la réponse..."
-          className="mt-1 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-white outline-none placeholder:text-gray-600 focus:border-amber-500"
-        />
+      {/* Preview mobile */}
+      <div className="mt-4 lg:hidden">
+        <QuestionPreview form={form} />
       </div>
 
       <div className="mt-5 flex gap-3">
         <button
           type="button"
           onClick={onSave}
-          disabled={saving || !form.question.trim()}
+          disabled={saving || !isValid}
+          title={
+            !isValid
+              ? "Complète la question et sélectionne une bonne réponse"
+              : undefined
+          }
           className="rounded-2xl bg-amber-500 px-5 py-3 font-black text-gray-950 hover:bg-amber-400 disabled:opacity-40"
         >
           {saving ? "Sauvegarde..." : isEdit ? "Enregistrer" : "Ajouter"}
@@ -340,21 +429,59 @@ function QuestionCard({
   onEdit,
   onDelete,
   onTogglePublic,
+  onDuplicate,
   proposeState,
   onPropose,
   onForcePropose,
+  selected,
+  onToggleSelect,
 }: {
   q: TeacherQuestion;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePublic: () => void;
+  onDuplicate: () => void;
   proposeState: ProposeState;
   onPropose: () => void;
   onForcePropose: () => void;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-gray-800 bg-gray-900 p-4">
+    <div
+      className={`rounded-2xl border bg-gray-900 p-4 transition ${
+        selected ? "border-amber-500/50" : "border-gray-800"
+      }`}
+    >
       <div className="flex items-start gap-3">
+        {/* Checkbox */}
+        <button
+          type="button"
+          onClick={onToggleSelect}
+          className={`mt-0.5 flex shrink-0 h-5 w-5 items-center justify-center rounded border-2 transition ${
+            selected
+              ? "border-amber-500 bg-amber-500"
+              : "border-gray-600 hover:border-gray-400"
+          }`}
+          aria-label={selected ? "Désélectionner" : "Sélectionner"}
+        >
+          {selected && (
+            <svg
+              viewBox="0 0 12 12"
+              fill="none"
+              className="h-3 w-3"
+            >
+              <path
+                d="M2 6l3 3 5-5"
+                stroke="#030712"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+        </button>
+
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -366,6 +493,11 @@ function QuestionCard({
             )}
             {q.subject && (
               <span className="text-xs text-gray-500">{q.subject}</span>
+            )}
+            {typeof q.use_count === "number" && (
+              <span className="text-xs text-gray-600">
+                {q.use_count} util.
+              </span>
             )}
           </div>
           <p className="mt-2 font-bold text-white">{q.question}</p>
@@ -405,6 +537,12 @@ function QuestionCard({
             className="rounded-xl border border-gray-700 px-3 py-1.5 text-xs font-bold text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
           >
             Éditer
+          </button>
+          <button
+            onClick={onDuplicate}
+            className="rounded-xl border border-gray-700 px-3 py-1.5 text-xs font-bold text-gray-400 hover:border-blue-500/50 hover:text-blue-300"
+          >
+            Dupliquer
           </button>
           <button
             onClick={onDelete}
@@ -464,10 +602,16 @@ function QuestionCard({
 function PdfUploadZone({
   loading,
   error,
+  warning,
+  progress,
+  pdfStats,
   onFile,
 }: {
   loading: boolean;
   error: string | null;
+  warning: string | null;
+  progress: number;
+  pdfStats: PdfStats | null;
   onFile: (f: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -487,6 +631,12 @@ function PdfUploadZone({
         automatique de la période historique.
       </p>
 
+      {warning && !loading && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm font-bold text-amber-300">
+          ⚠️ {warning}
+        </div>
+      )}
+
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -494,19 +644,30 @@ function PdfUploadZone({
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => !loading && inputRef.current?.click()}
         className={`flex cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed p-12 transition ${
           dragging
             ? "border-amber-500 bg-amber-500/5"
+            : loading
+            ? "cursor-default border-gray-800"
             : "border-gray-700 bg-gray-900 hover:border-amber-500/50"
         }`}
       >
         {loading ? (
           <>
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-700 border-t-amber-500" />
-            <p className="mt-4 font-bold text-amber-400">Analyse en cours...</p>
-            <p className="mt-1 text-sm text-gray-500">
-              Cela peut prendre quelques secondes
+            <p className="mt-4 font-bold text-amber-400">Analyse en cours…</p>
+            <div className="mt-4 w-full max-w-xs">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+                <div
+                  className="h-full rounded-full bg-amber-500 transition-all duration-300"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              <p className="mt-1 text-center text-xs text-gray-500">{progress}%</p>
+            </div>
+            <p className="mt-2 text-sm text-gray-500">
+              Cela peut prendre jusqu&apos;à 60 secondes
             </p>
           </>
         ) : (
@@ -514,7 +675,7 @@ function PdfUploadZone({
             <span className="text-5xl">📄</span>
             <p className="mt-4 font-black text-white">Dépose ton PDF ici</p>
             <p className="mt-1 text-sm text-gray-500">
-              ou clique pour parcourir
+              ou clique pour parcourir · max 8 Mo
             </p>
           </>
         )}
@@ -528,8 +689,27 @@ function PdfUploadZone({
         onChange={(e) => {
           const file = e.target.files?.[0];
           if (file) onFile(file);
+          e.target.value = "";
         }}
       />
+
+      {pdfStats && !loading && (
+        <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-3">
+          {pdfStats.fromCache && (
+            <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-black text-green-400">
+              ✓ Questions récupérées depuis le cache
+            </span>
+          )}
+          {pdfStats.pageCount !== null && (
+            <span className="text-sm text-gray-400">
+              {pdfStats.pageCount} page(s) analysée(s)
+            </span>
+          )}
+          <span className="text-sm text-gray-400">
+            {pdfStats.questionCount} question(s) générée(s)
+          </span>
+        </div>
+      )}
 
       {error && (
         <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm font-bold text-red-300">
@@ -604,7 +784,7 @@ function DraftCard({
         className="mt-3 w-full rounded-xl border border-gray-700 bg-gray-950 px-3 py-2 text-sm font-bold text-white outline-none focus:border-amber-500"
       />
 
-      <div className={`mt-3 grid gap-2 ${isTrueFalse ? "grid-cols-2" : "grid-cols-2"}`}>
+      <div className="mt-3 grid grid-cols-2 gap-2">
         {draft.options.map((opt, i) => (
           <div key={i} className="flex items-center gap-2">
             <button
@@ -677,9 +857,11 @@ export default function SchoolQuestionsPage() {
   const [form, setForm] = useState({ ...BLANK_FORM });
   const [saving, setSaving] = useState(false);
 
-  // My questions filters
+  // My questions filters + sort + selection
   const [myFilterType, setMyFilterType] = useState("");
   const [myFilterPeriod, setMyFilterPeriod] = useState("");
+  const [sortBy, setSortBy] = useState<"date" | "type" | "period">("date");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Propose
   const [proposeStatuses, setProposeStatuses] = useState<
@@ -689,8 +871,14 @@ export default function SchoolQuestionsPage() {
   // PDF
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfWarning, setPdfWarning] = useState<string | null>(null);
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const [pdfStats, setPdfStats] = useState<PdfStats | null>(null);
   const [drafts, setDrafts] = useState<DraftQuestion[]>([]);
   const [savingDrafts, setSavingDrafts] = useState(false);
+
+  // AI explanation generation
+  const [generatingExplanation, setGeneratingExplanation] = useState(false);
 
   // Public library
   const [publicQuestions, setPublicQuestions] = useState<PublicQuestion[]>([]);
@@ -823,6 +1011,11 @@ export default function SchoolQuestionsPage() {
     if (!confirm("Supprimer cette question définitivement ?")) return;
     await supabase.from("teacher_questions").delete().eq("id", id);
     setMyQuestions((prev) => prev.filter((q) => q.id !== id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   async function togglePublic(q: TeacherQuestion) {
@@ -833,6 +1026,84 @@ export default function SchoolQuestionsPage() {
     setMyQuestions((prev) =>
       prev.map((x) => (x.id === q.id ? { ...x, is_public: !x.is_public } : x))
     );
+  }
+
+  async function duplicateQuestion(q: TeacherQuestion) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from("teacher_questions").insert({
+      teacher_id: user.id,
+      type: q.type,
+      question: `Copie — ${q.question}`,
+      options: q.options,
+      answer_index: q.answer_index,
+      explanation: q.explanation,
+      subject: q.subject,
+      period: q.period,
+      is_public: false,
+    });
+
+    await loadMyQuestions();
+  }
+
+  function toggleSelectId(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function exportSelected() {
+    const toExport = myQuestions.filter((q) => selectedIds.has(q.id));
+    if (!toExport.length) return;
+
+    const data = toExport.map((q) => ({
+      type: q.type,
+      question: q.question,
+      options: q.options,
+      answer_index: q.answer_index,
+      explanation: q.explanation,
+      period: q.period,
+      subject: q.subject,
+    }));
+
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `questions_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function generateExplanation() {
+    if (!form.question.trim()) return;
+    setGeneratingExplanation(true);
+    try {
+      const options =
+        form.type === "truefalse" ? ["Vrai", "Faux"] : form.options;
+      const res = await fetch("/api/generate-explanation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question: form.question,
+          options,
+          answerIndex: form.answer_index,
+        }),
+      });
+      const json = await res.json();
+      if (json.explanation) {
+        setForm({ ...form, explanation: json.explanation });
+      }
+    } catch {}
+    setGeneratingExplanation(false);
   }
 
   // ── Propose ──
@@ -873,9 +1144,33 @@ export default function SchoolQuestionsPage() {
   // ── PDF ──
 
   async function handlePdfUpload(file: File) {
+    const MAX_BYTES = 8 * 1024 * 1024;
+    const WARN_BYTES = 4 * 1024 * 1024;
+
+    if (file.size > MAX_BYTES) {
+      setPdfError(
+        "PDF trop volumineux (max 8 Mo). Compresse-le sur ilovepdf.com"
+      );
+      return;
+    }
+
+    setPdfWarning(
+      file.size > WARN_BYTES
+        ? "PDF volumineux, l'analyse peut prendre jusqu'à 60 secondes…"
+        : null
+    );
     setPdfError(null);
     setPdfLoading(true);
+    setPdfStats(null);
     setDrafts([]);
+    setPdfProgress(0);
+
+    const startTime = Date.now();
+    const intervalId = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(95, Math.round((elapsed / 30000) * 95));
+      setPdfProgress(pct);
+    }, 300);
 
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -889,6 +1184,8 @@ export default function SchoolQuestionsPage() {
         });
 
         const json = await res.json();
+        clearInterval(intervalId);
+        setPdfProgress(100);
 
         if (!res.ok || json.error) {
           setPdfError(json.error ?? "Erreur lors de l'analyse");
@@ -897,7 +1194,7 @@ export default function SchoolQuestionsPage() {
         }
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        setDrafts((json.questions as any[]).map((q, i) => ({
+        const questions = (json.questions as any[]).map((q, i) => ({
           key: i,
           type: q.type ?? "mcq",
           question: q.question ?? "",
@@ -906,8 +1203,17 @@ export default function SchoolQuestionsPage() {
           explanation: q.explanation ?? "",
           period: q.period ?? "",
           kept: true,
-        })));
+        }));
+
+        setDrafts(questions);
+        setPdfStats({
+          pageCount:
+            typeof json.pageCount === "number" ? json.pageCount : null,
+          questionCount: questions.length,
+          fromCache: json.fromCache === true,
+        });
       } catch {
+        clearInterval(intervalId);
         setPdfError("Erreur réseau, réessaie.");
       }
 
@@ -978,12 +1284,19 @@ export default function SchoolQuestionsPage() {
     setAddingId(null);
   }
 
-  // ── Filtered lists ──
+  // ── Filtered + sorted lists ──
 
   const filteredMyQuestions = myQuestions.filter((q) => {
     if (myFilterType && q.type !== myFilterType) return false;
     if (myFilterPeriod && q.period !== myFilterPeriod) return false;
     return true;
+  });
+
+  const sortedMyQuestions = [...filteredMyQuestions].sort((a, b) => {
+    if (sortBy === "type") return a.type.localeCompare(b.type);
+    if (sortBy === "period")
+      return (a.period ?? "").localeCompare(b.period ?? "");
+    return 0; // "date": DB already returns desc by created_at
   });
 
   const filteredPublic = publicQuestions.filter((q) => {
@@ -1075,6 +1388,8 @@ export default function SchoolQuestionsPage() {
                   onCancel={resetForm}
                   saving={saving}
                   isEdit={!!editingId}
+                  generatingExpl={generatingExplanation}
+                  onGenerateExpl={generateExplanation}
                 />
               ) : (
                 <button
@@ -1089,12 +1404,49 @@ export default function SchoolQuestionsPage() {
                 </button>
               )}
 
-              <FilterBar
-                filterType={myFilterType}
-                setFilterType={setMyFilterType}
-                filterPeriod={myFilterPeriod}
-                setFilterPeriod={setMyFilterPeriod}
-              />
+              {/* Filters + sort */}
+              <div className="mb-5 flex flex-wrap items-center gap-2">
+                <FilterBar
+                  filterType={myFilterType}
+                  setFilterType={setMyFilterType}
+                  filterPeriod={myFilterPeriod}
+                  setFilterPeriod={setMyFilterPeriod}
+                />
+                <select
+                  value={sortBy}
+                  onChange={(e) =>
+                    setSortBy(e.target.value as "date" | "type" | "period")
+                  }
+                  className="rounded-xl border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white outline-none focus:border-amber-500"
+                >
+                  <option value="date">Trier par date</option>
+                  <option value="type">Trier par type</option>
+                  <option value="period">Trier par période</option>
+                </select>
+              </div>
+
+              {/* Export bar */}
+              {selectedIds.size > 0 && (
+                <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3">
+                  <span className="flex-1 text-sm font-bold text-amber-300">
+                    {selectedIds.size} question
+                    {selectedIds.size > 1 ? "s" : ""} sélectionnée
+                    {selectedIds.size > 1 ? "s" : ""}
+                  </span>
+                  <button
+                    onClick={exportSelected}
+                    className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-black text-gray-950 transition hover:bg-amber-400"
+                  >
+                    ⬇ Exporter JSON
+                  </button>
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs text-gray-500 hover:text-white"
+                  >
+                    Désélectionner tout
+                  </button>
+                </div>
+              )}
 
               {filteredMyQuestions.length === 0 && !showForm ? (
                 <div className="rounded-2xl border border-dashed border-gray-800 p-10 text-center text-gray-500">
@@ -1104,7 +1456,7 @@ export default function SchoolQuestionsPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredMyQuestions.map((q) =>
+                  {sortedMyQuestions.map((q) =>
                     editingId === q.id && showForm ? null : (
                       <QuestionCard
                         key={q.id}
@@ -1112,11 +1464,14 @@ export default function SchoolQuestionsPage() {
                         onEdit={() => startEdit(q)}
                         onDelete={() => deleteQuestion(q.id)}
                         onTogglePublic={() => togglePublic(q)}
+                        onDuplicate={() => duplicateQuestion(q)}
                         proposeState={
                           proposeStatuses[q.id] ?? { kind: "idle" }
                         }
                         onPropose={() => proposeQuestion(q.id)}
                         onForcePropose={() => proposeQuestion(q.id, true)}
+                        selected={selectedIds.has(q.id)}
+                        onToggleSelect={() => toggleSelectId(q.id)}
                       />
                     )
                   )}
@@ -1132,6 +1487,9 @@ export default function SchoolQuestionsPage() {
                 <PdfUploadZone
                   loading={pdfLoading}
                   error={pdfError}
+                  warning={pdfWarning}
+                  progress={pdfProgress}
+                  pdfStats={pdfStats}
                   onFile={handlePdfUpload}
                 />
               ) : (
@@ -1143,7 +1501,10 @@ export default function SchoolQuestionsPage() {
                     </p>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => setDrafts([])}
+                        onClick={() => {
+                          setDrafts([]);
+                          setPdfStats(null);
+                        }}
                         className="rounded-xl border border-gray-700 px-4 py-2 text-sm font-bold text-gray-300 hover:text-white"
                       >
                         Recommencer
@@ -1160,6 +1521,21 @@ export default function SchoolQuestionsPage() {
                       </button>
                     </div>
                   </div>
+
+                  {pdfStats && (
+                    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-gray-800 bg-gray-900 px-4 py-3">
+                      {pdfStats.fromCache && (
+                        <span className="rounded-full bg-green-500/10 px-3 py-1 text-xs font-black text-green-400">
+                          ✓ Questions récupérées depuis le cache
+                        </span>
+                      )}
+                      {pdfStats.pageCount !== null && (
+                        <span className="text-sm text-gray-400">
+                          {pdfStats.pageCount} page(s) analysée(s)
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   <div className="space-y-4">
                     {drafts.map((draft, idx) => (
@@ -1182,15 +1558,17 @@ export default function SchoolQuestionsPage() {
           {/* ── Public library ── */}
           {tab === "public" && (
             <div>
-              <FilterBar
-                filterType={pubFilterType}
-                setFilterType={setPubFilterType}
-                filterPeriod={pubFilterPeriod}
-                setFilterPeriod={setPubFilterPeriod}
-                filterText={pubFilterText}
-                setFilterText={setPubFilterText}
-                showText
-              />
+              <div className="mb-5">
+                <FilterBar
+                  filterType={pubFilterType}
+                  setFilterType={setPubFilterType}
+                  filterPeriod={pubFilterPeriod}
+                  setFilterPeriod={setPubFilterPeriod}
+                  filterText={pubFilterText}
+                  setFilterText={setPubFilterText}
+                  showText
+                />
+              </div>
 
               <p className="mb-4 text-sm text-gray-500">
                 {filteredPublic.length} question(s) approuvée(s) HistoGuess
